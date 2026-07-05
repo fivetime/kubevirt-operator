@@ -125,16 +125,16 @@ to an even parity when using emulator thread isolation.
 
 **Graduation Status**: Alpha
 
-### disableMDevConfiguration Feature Gate
-KubeVirt aims to facilitate the configuration of mediated devices on large clusters.
+### disableMDevConfiguration Feature Gate (deprecated)
 
-If this is not desired, set the `disableMDevConfiguration` feature gate in order to disable this feature.
-
-**Note**: this feature is in Developer Preview.
+The `disableMDevConfiguration` feature gate is deprecated. Use
+`spec.virtualization.mediatedDevicesConfiguration.enabled` instead (`enabled: false` preserves prior behavior when
+the feature gate was used to disable mediated device configuration). See
+[Automatic Configuration of Mediated Devices](#automatic-configuration-of-mediated-devices-including-vgpus) for details.
 
 **Default**: `Disabled`
 
-**Graduation Status**: Alpha
+**Graduation Status**: Deprecated
 
 ### decentralizedLiveMigration Feature Gate
 By default, live migration is limited in its flexibility because the migration is centralized. This limits live
@@ -334,6 +334,29 @@ Cluster-admins can provide a list of desired mediated devices (vGPU) types.
 KubeVirt will attempt to automatically create the relevant devices on nodes that can support such configuration.
 Currently, it is possible to configure one type per physical card.
 KubeVirt will configure all `available_instances` for each configurable type.
+
+The `enabled` field controls whether virt-handler automatically creates and removes mediated devices on cluster nodes.
+It defaults to `true` when omitted. Set `enabled: false` to disable automatic mediated device configuration.
+
+#### Example: disabling automatic mediated device configuration
+
+```yaml
+apiVersion: hco.kubevirt.io/v1
+kind: HyperConverged
+metadata:
+  name: kubevirt-hyperconverged
+spec:
+  virtualization:
+    mediatedDevicesConfiguration:
+      enabled: false
+      mediatedDeviceTypes:
+      - nvidia-222
+```
+
+**Migration from `disableMDevConfiguration`:** The deprecated `disableMDevConfiguration` feature gate is replaced by
+`spec.virtualization.mediatedDevicesConfiguration.enabled`. If you previously used the feature gate to disable
+mediated device configuration, set `enabled: false` to preserve the same behavior. When both are set,
+`enabled` takes precedence over the deprecated feature gate.
 
 #### Example
 
@@ -1812,6 +1835,37 @@ metadata:
 spec:
   deployment:
     deployVmConsoleProxy: true
+```
+
+### Deploy Network Resources Injector
+The Network Resources Injector is a webhook that injects network-related resource requests into pod specifications based on network annotations. It is critical for proper SR-IOV and other network resource management.
+
+To control the deployment of the Network Resources Injector, set the `spec.deployment.deployNetworkResourcesInjector` field.
+
+**Default**: `true`
+
+**Note**: This component is mandatory for proper network resource management. Set this to `false` only if another instance is running elsewhere (e.g., under SR-IOV operator) to avoid conflicts, or if your system does not make use of multus with custom network resources.
+
+#### Example
+```yaml
+apiVersion: hco.kubevirt.io/v1
+kind: HyperConverged
+metadata:
+  name: kubevirt-hyperconverged
+spec:
+  deployment:
+    deployNetworkResourcesInjector: true
+```
+
+To disable the deployment (when running an external instance):
+```yaml
+apiVersion: hco.kubevirt.io/v1
+kind: HyperConverged
+metadata:
+  name: kubevirt-hyperconverged
+spec:
+  deployment:
+    deployNetworkResourcesInjector: false
 ```
 
 ## Configurations via Annotations

@@ -97,10 +97,6 @@ type HyperConvergedSpec struct {
 	//   Deploy KubeSecondaryDNS by CNAO
 	//   Phase: alpha
 	//
-	// * disableMDevConfiguration:
-	//   Disable mediated devices handling on KubeVirt
-	//   Phase: alpha
-	//
 	// * downwardMetrics:
 	//   Allow to expose a limited set of host metrics to guests.
 	//   Phase: alpha
@@ -135,6 +131,12 @@ type HyperConvergedSpec struct {
 	//   gate causes the redeployment of the virt-handler pod.
 	//   Phase: alpha
 	//
+	// * disableMDevConfiguration:
+	//   Deprecated: use spec.virtualization.mediatedDevicesConfiguration.enabled
+	//   instead. This feature gate is deprecated and will be removed in a future
+	//   release.
+	//   Phase: deprecated
+	//
 	// +optional
 	// +k8s:conversion-gen=false
 	FeatureGates featuregates.HyperConvergedFeatureGates `json:"featureGates,omitempty"`
@@ -164,7 +166,7 @@ type HyperConvergedSpec struct {
 	Security SecurityConfig `json:"security,omitempty"`
 
 	// Deployment contains all the configurations related to deployment of KubeVirt components
-	// +kubebuilder:default={"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "applicationAwareConfig": {"enable": false}}
+	// +kubebuilder:default={"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "deployNetworkResourcesInjector": true, "applicationAwareConfig": {"enable": false}}
 	// +optional
 	// +k8s:conversion-gen=false
 	Deployment DeploymentConfig `json:"deployment,omitempty"`
@@ -418,6 +420,14 @@ type DeploymentConfig struct {
 	// +kubebuilder:default=false
 	// +default=false
 	DeployVMConsoleProxy *bool `json:"deployVmConsoleProxy,omitempty"`
+
+	// DeployNetworkResourcesInjector enables deployment of the network-resources-injector component.
+	// When enabled, the network-resources-injector mutating webhook will be deployed to automatically
+	// inject resource requests for custom resources annotated in NetworkAttachmentDefinition.
+	// +optional
+	// +kubebuilder:default=true
+	// +default=true
+	DeployNetworkResourcesInjector *bool `json:"deployNetworkResourcesInjector,omitempty"`
 }
 
 // CertRotateConfigCA contains the tunables for TLS certificates.
@@ -659,6 +669,12 @@ type MediatedHostDevice struct {
 // MediatedDevicesConfiguration holds information about MDEV types to be defined, if available
 // +k8s:openapi-gen=true
 type MediatedDevicesConfiguration struct {
+
+	// Enables the creation and removal of mediated devices by virt-handler
+	// +optional
+	// +k8s:conversion-gen=false
+	Enabled *bool `json:"enabled,omitempty"`
+
 	// +optional
 	// +listType=atomic
 	MediatedDeviceTypes []string `json:"mediatedDeviceTypes"`
@@ -925,7 +941,7 @@ type HyperConverged struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// +kubebuilder:default={"security": {"certConfig": {"ca": {"duration": "48h0m0s", "renewBefore": "24h0m0s"}, "server": {"duration": "24h0m0s", "renewBefore": "12h0m0s"}}}, "virtualization": {"liveMigrationConfig": {"completionTimeoutPerGiB": 150, "parallelMigrationsPerCluster": 5, "parallelOutboundMigrationsPerNode": 2, "progressTimeout": 150, "allowAutoConverge": false, "allowPostCopy": false}, "virtualMachineOptions": {"disableFreePageReporting": false, "disableSerialConsoleLog": false}, "vmiCPUAllocationRatio": 10},"workloadSources":{"enableCommonBootImageImport":true}, "deployment": {"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "applicationAwareConfig": {"enable": false}}}
+	// +kubebuilder:default={"security": {"certConfig": {"ca": {"duration": "48h0m0s", "renewBefore": "24h0m0s"}, "server": {"duration": "24h0m0s", "renewBefore": "12h0m0s"}}}, "virtualization": {"liveMigrationConfig": {"completionTimeoutPerGiB": 150, "parallelMigrationsPerCluster": 5, "parallelOutboundMigrationsPerNode": 2, "progressTimeout": 150, "allowAutoConverge": false, "allowPostCopy": false}, "virtualMachineOptions": {"disableFreePageReporting": false, "disableSerialConsoleLog": false}, "vmiCPUAllocationRatio": 10},"workloadSources":{"enableCommonBootImageImport":true}, "deployment": {"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "deployNetworkResourcesInjector": true, "applicationAwareConfig": {"enable": false}}}
 	// +optional
 	Spec   HyperConvergedSpec   `json:"spec,omitempty"`
 	Status HyperConvergedStatus `json:"status,omitempty"`

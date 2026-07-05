@@ -124,6 +124,7 @@ DataImportCronTemplateStatus is a copy of a dataImportCronTemplate as defined in
 | logVerbosityConfig | LogVerbosityConfig configures the verbosity level of Kubevirt's different components. The higher the value - the higher the log verbosity. | *[LogVerbosityConfiguration](#logverbosityconfiguration) |  | false |
 | applicationAwareConfig | ApplicationAwareConfig set the AAQ configurations | *[ApplicationAwareConfigurations](#applicationawareconfigurations) |  | false |
 | deployVmConsoleProxy | deploy VM console proxy resources in SSP operator | *bool | false | false |
+| deployNetworkResourcesInjector | DeployNetworkResourcesInjector enables deployment of the network-resources-injector component. When enabled, the network-resources-injector mutating webhook will be deployed to automatically inject resource requests for custom resources annotated in NetworkAttachmentDefinition. | *bool | true | false |
 
 [Back to TOC](#table-of-contents)
 
@@ -144,7 +145,7 @@ HyperConverged is the Schema for the hyperconvergeds API
 | Field | Description | Scheme | Default | Required |
 | ----- | ----------- | ------ | ------- | -------- |
 | metadata |  | [metav1.ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta) |  | false |
-| spec |  | [HyperConvergedSpec](#hyperconvergedspec) | {"security": {"certConfig": {"ca": {"duration": "48h0m0s", "renewBefore": "24h0m0s"}, "server": {"duration": "24h0m0s", "renewBefore": "12h0m0s"}}}, "virtualization": {"liveMigrationConfig": {"completionTimeoutPerGiB": 150, "parallelMigrationsPerCluster": 5, "parallelOutboundMigrationsPerNode": 2, "progressTimeout": 150, "allowAutoConverge": false, "allowPostCopy": false}, "virtualMachineOptions": {"disableFreePageReporting": false, "disableSerialConsoleLog": false}, "vmiCPUAllocationRatio": 10},"workloadSources":{"enableCommonBootImageImport":true}, "deployment": {"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "applicationAwareConfig": {"enable": false}}} | false |
+| spec |  | [HyperConvergedSpec](#hyperconvergedspec) | {"security": {"certConfig": {"ca": {"duration": "48h0m0s", "renewBefore": "24h0m0s"}, "server": {"duration": "24h0m0s", "renewBefore": "12h0m0s"}}}, "virtualization": {"liveMigrationConfig": {"completionTimeoutPerGiB": 150, "parallelMigrationsPerCluster": 5, "parallelOutboundMigrationsPerNode": 2, "progressTimeout": 150, "allowAutoConverge": false, "allowPostCopy": false}, "virtualMachineOptions": {"disableFreePageReporting": false, "disableSerialConsoleLog": false}, "vmiCPUAllocationRatio": 10},"workloadSources":{"enableCommonBootImageImport":true}, "deployment": {"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "deployNetworkResourcesInjector": true, "applicationAwareConfig": {"enable": false}}} | false |
 | status |  | [HyperConvergedStatus](#hyperconvergedstatus) |  | false |
 
 [Back to TOC](#table-of-contents)
@@ -183,7 +184,7 @@ HyperConvergedSpec defines the desired state of HyperConverged
 | networking | Networking contains all the configurations for networking | *[NetworkingConfig](#networkingconfig) |  | false |
 | workloadSources | WorkloadSources contains all the configurations for workload sources | [WorkloadSourcesConfig](#workloadsourcesconfig) |  | false |
 | security | Security contains all the security configurations | [SecurityConfig](#securityconfig) | {"certConfig": {"ca": {"duration": "48h0m0s", "renewBefore": "24h0m0s"}, "server": {"duration": "24h0m0s", "renewBefore": "12h0m0s"}}} | false |
-| deployment | Deployment contains all the configurations related to deployment of KubeVirt components | [DeploymentConfig](#deploymentconfig) | {"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "applicationAwareConfig": {"enable": false}} | false |
+| deployment | Deployment contains all the configurations related to deployment of KubeVirt components | [DeploymentConfig](#deploymentconfig) | {"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "deployNetworkResourcesInjector": true, "applicationAwareConfig": {"enable": false}} | false |
 
 [Back to TOC](#table-of-contents)
 
@@ -262,6 +263,7 @@ MediatedDevicesConfiguration holds information about MDEV types to be defined, i
 
 | Field | Description | Scheme | Default | Required |
 | ----- | ----------- | ------ | ------- | -------- |
+| enabled | Enables the creation and removal of mediated devices by virt-handler | *bool |  | false |
 | mediatedDeviceTypes |  | []string |  | true |
 | nodeMediatedDeviceTypes |  | [][NodeMediatedDeviceTypesConfig](#nodemediateddevicetypesconfig) |  | false |
 
@@ -495,12 +497,12 @@ A feature gate may be in the following phases:
 | containerPathVolumes | ContainerPathVolumes enables the use of container paths as volumes in KubeVirt. This allows VMs to access files and directories from the virt-launcher pod's filesystem via virtiofs. | alpha |
 | declarativeHotplugVolumes | DeclarativeHotplugVolumes enables the use of the declarative volume hotplug feature in KubeVirt. When set to true, the "DeclarativeHotplugVolumes" feature gate is enabled instead of "HotplugVolumes". When set to false or nil, the "HotplugVolumes" feature gate is enabled (default behavior). This feature is in Developer Preview. | alpha |
 | deployKubeSecondaryDNS | Deploy KubeSecondaryDNS by CNAO | alpha |
-| disableMDevConfiguration | Disable mediated devices handling on KubeVirt | alpha |
 | downwardMetrics | Allow to expose a limited set of host metrics to guests. | alpha |
 | enableMultiArchBootImageImport | EnableMultiArchBootImageImport allows the HCO to run on heterogeneous clusters with different CPU architectures. Setting this field to true will allow the HCO to create Golden Images for different CPU architectures. This feature is in Developer Preview. | alpha |
 | incrementalBackup | IncrementalBackup enables changed block tracking backups and incremental backups using QEMU capabilities in KubeVirt. When enabled, this also enables the UtilityVolumes feature gate in the KubeVirt CR. Note: This feature is in Tech Preview. | alpha |
 | objectGraph | ObjectGraph enables the ObjectGraph VM and VMI subresource in KubeVirt. This subresource returns a structured list of k8s objects that are related to the specified VM or VMI, enabling better dependency tracking. Note: This feature is in Developer Preview. | alpha |
 | persistentReservation | Enable persistent reservation of a LUN through the SCSI Persistent Reserve commands on Kubevirt. In order to issue privileged SCSI ioctls, the VM requires activation of the persistent reservation flag. Once this feature gate is enabled, then the additional container with the qemu-pr-helper is deployed inside the virt-handler pod. Enabling (or removing) the feature gate causes the redeployment of the virt-handler pod. | alpha |
+| disableMDevConfiguration | Deprecated: use spec.virtualization.mediatedDevicesConfiguration.enabled instead. This feature gate is deprecated and will be removed in a future release. | deprecated |
 
 [Back to TOC](#table-of-contents)
 
