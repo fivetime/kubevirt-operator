@@ -67,10 +67,21 @@ type HyperConvergedSpec struct {
 	//   Developer Preview.
 	//   Phase: beta
 	//
-	// * videoConfig:
-	//   VideoConfig allows users to configure video device types for their virtual
-	//   machines. This can be useful for workloads that require specific video
-	//   capabilities or architectures. Note: This feature is in Tech Preview.
+	// * declarativeHotplugVolumes:
+	//   DeclarativeHotplugVolumes enables the use of the declarative volume
+	//   hotplug feature in KubeVirt. When set to true or nil, the
+	//   "DeclarativeHotplugVolumes" feature gate is enabled and the
+	//   "HotplugVolumes" feature gate is not (default behavior). When set to
+	//   false, the "HotplugVolumes" featuregate is enabled in KubeVirt. This
+	//   feature is in Technical Preview.
+	//   Phase: beta
+	//
+	// * template:
+	//   VirtualMachine Templates provide a native, in-cluster VM templating for
+	//   KubeVirt. They allow you to define reusable VM blueprints with
+	//   parameterized values that can be processed to create virtual machine. the
+	//   "template" feature gate enables this feature. Note: this feature is in
+	//   Tech Preview.
 	//   Phase: beta
 	//
 	// * alignCPUs:
@@ -83,14 +94,6 @@ type HyperConvergedSpec struct {
 	//   ContainerPathVolumes enables the use of container paths as volumes in
 	//   KubeVirt. This allows VMs to access files and directories from the
 	//   virt-launcher pod's filesystem via virtiofs.
-	//   Phase: alpha
-	//
-	// * declarativeHotplugVolumes:
-	//   DeclarativeHotplugVolumes enables the use of the declarative volume
-	//   hotplug feature in KubeVirt. When set to true, the
-	//   "DeclarativeHotplugVolumes" feature gate is enabled instead of
-	//   "HotplugVolumes". When set to false or nil, the "HotplugVolumes" feature
-	//   gate is enabled (default behavior). This feature is in Developer Preview.
 	//   Phase: alpha
 	//
 	// * deployKubeSecondaryDNS:
@@ -166,7 +169,7 @@ type HyperConvergedSpec struct {
 	Security SecurityConfig `json:"security,omitempty"`
 
 	// Deployment contains all the configurations related to deployment of KubeVirt components
-	// +kubebuilder:default={"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "deployNetworkResourcesInjector": true, "applicationAwareConfig": {"enable": false}}
+	// +kubebuilder:default={"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "applicationAwareConfig": {"enable": false}}
 	// +optional
 	// +k8s:conversion-gen=false
 	Deployment DeploymentConfig `json:"deployment,omitempty"`
@@ -425,8 +428,6 @@ type DeploymentConfig struct {
 	// When enabled, the network-resources-injector mutating webhook will be deployed to automatically
 	// inject resource requests for custom resources annotated in NetworkAttachmentDefinition.
 	// +optional
-	// +kubebuilder:default=true
-	// +default=true
 	DeployNetworkResourcesInjector *bool `json:"deployNetworkResourcesInjector,omitempty"`
 }
 
@@ -941,7 +942,7 @@ type HyperConverged struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// +kubebuilder:default={"security": {"certConfig": {"ca": {"duration": "48h0m0s", "renewBefore": "24h0m0s"}, "server": {"duration": "24h0m0s", "renewBefore": "12h0m0s"}}}, "virtualization": {"liveMigrationConfig": {"completionTimeoutPerGiB": 150, "parallelMigrationsPerCluster": 5, "parallelOutboundMigrationsPerNode": 2, "progressTimeout": 150, "allowAutoConverge": false, "allowPostCopy": false}, "virtualMachineOptions": {"disableFreePageReporting": false, "disableSerialConsoleLog": false}, "vmiCPUAllocationRatio": 10},"workloadSources":{"enableCommonBootImageImport":true}, "deployment": {"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "deployNetworkResourcesInjector": true, "applicationAwareConfig": {"enable": false}}}
+	// +kubebuilder:default={"security": {"certConfig": {"ca": {"duration": "48h0m0s", "renewBefore": "24h0m0s"}, "server": {"duration": "24h0m0s", "renewBefore": "12h0m0s"}}}, "virtualization": {"liveMigrationConfig": {"completionTimeoutPerGiB": 150, "parallelMigrationsPerCluster": 5, "parallelOutboundMigrationsPerNode": 2, "progressTimeout": 150, "allowAutoConverge": false, "allowPostCopy": false}, "virtualMachineOptions": {"disableFreePageReporting": false, "disableSerialConsoleLog": false}, "vmiCPUAllocationRatio": 10},"workloadSources":{"enableCommonBootImageImport":true}, "deployment": {"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "applicationAwareConfig": {"enable": false}}}
 	// +optional
 	Spec   HyperConvergedSpec   `json:"spec,omitempty"`
 	Status HyperConvergedStatus `json:"status,omitempty"`

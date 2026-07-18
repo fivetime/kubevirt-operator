@@ -54,7 +54,7 @@ To enable a feature, add a new feature gate object to the `featureGates` list. T
 by default (a beta feature gate), set its `state` field to `Disabled`. The default value of the `state` field is
 `Enabled`, and there is no need to set it to enable a feature gate.
 
-For example, the following setting enables the `alignCPUs` feature gate (alpha), and disables the `videoConfig` feature
+For example, the following setting enables the `alignCPUs` feature gate (alpha), and disables the `decentralizedLiveMigration` feature
 gate (beta).
 ```yaml
 apiVersion: hco.kubevirt.io/v1
@@ -65,9 +65,25 @@ metadata:
 spec:
   featureGates:
   - name: alignCPUs
-  - name: videoConfig
+  - name: decentralizedLiveMigration
     state: Disabled
 ```
+
+The feature gate names are case-insensitive. The above example can be done also like this:
+```yaml
+apiVersion: hco.kubevirt.io/v1
+kind: HyperConverged
+metadata:
+  name: kubevirt-hyperconverged
+  namespace: kubevirt-hyperconverged
+spec:
+  featureGates:
+  - name: AlignCPUs
+  - name: DecentralizedLiveMigration
+    state: Disabled
+```
+
+> **Note**: Feature gate names must be unique (case-insensitive) in the `spec.featureGates` list.
 
 ### downwardMetrics Feature Gate
 Add the `downwardMetrics` feature gate in order to allow exposing a limited set of VM and host metrics to the guest.
@@ -157,24 +173,25 @@ volume hotplug operations are performed using KubeVirt's subresource API. Change
 spec require a VM restart to take effect. When enabled, volume hotplug operations can be performed declaratively by
 modifying the VirtualMachine spec directly. These changes are applied immediately without requiring a VM restart.
 
-**Note**: This feature is in Developer Preview.
+**Note**: This feature is in Technical Preview.
 
-**Default**: `Disabled`
+**Default**: `Enabled`
 
-**Graduation Status**: Alpha
+**Graduation Status**: Beta
 
-### videoConfig Feature Gate
-By default, the video type depends on the architecture and firmware:
-* For amd64: vga for BIOS VMs, and bochs for UEFI VMs.
-* For arm64 and s390x: virtio.
+### template FeatureGate
+*VirtualMachine Templates* provide a native, in-cluster VM templating for KubeVirt. They allow you to define reusable
+virtual machine blueprints with parameterized values that can be processed to create virtual machine.
 
-By default, it is possible to explicitly configuring the video type in the
-VirtualMachine spec.
+Unlike external templating tools such as Helm or Kustomize, `VirtualMachineTemplates` can capture storage state (e.g.
+DataVolume snapshots and cloned disks) that external tools cannot represent. They also work on any Kubernetes cluster
+without requiring OpenShift.
 
-To prevent customization of Virtual Machine video configurations, ddd the
-`videoConfig` feature gate with the `state` field set to `Disabled`.
+See more details [here](https://kubevirt.io/user-guide/user_workloads/vm_templates/)
 
-**Note**: This feature is in Tech Preview.
+the `template` feature gate enables this feature.
+
+**Note**: this feature is in Technical Preview.
 
 **Default**: `Enabled`
 

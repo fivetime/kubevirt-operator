@@ -24,6 +24,7 @@ var _ = Describe("Network Resources Injector MutatingWebhookConfiguration", func
 
 	BeforeEach(func() {
 		hco = commontestutils.NewHco()
+		hco.Spec.Deployment.DeployNetworkResourcesInjector = new(true)
 		req = commontestutils.NewReq(hco)
 	})
 
@@ -45,7 +46,12 @@ var _ = Describe("Network Resources Injector MutatingWebhookConfiguration", func
 			Expect(wh.Rules).To(HaveLen(1))
 			Expect(wh.Rules[0].Operations).To(ContainElement(admissionregistrationv1.Create))
 			Expect(wh.Rules[0].Rule.Resources).To(ContainElement("pods"))
-			Expect(wh.MatchConditions).To(HaveLen(2))
+			Expect(wh.MatchConditions).ToNot(ContainElement(
+				WithTransform(func(mc admissionregistrationv1.MatchCondition) string { return mc.Expression },
+					ContainSubstring("labels")),
+			), "label filtering should use objectSelector, not matchConditions")
+			Expect(wh.ObjectSelector).ToNot(BeNil())
+			Expect(wh.ObjectSelector.MatchLabels).To(HaveKeyWithValue("kubevirt.io", "virt-launcher"))
 			Expect(wh.ClientConfig.Service).ToNot(BeNil())
 			Expect(wh.ClientConfig.Service.Name).To(Equal(serviceName))
 		})

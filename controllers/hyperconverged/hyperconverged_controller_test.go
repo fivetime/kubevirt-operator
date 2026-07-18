@@ -146,7 +146,6 @@ var _ = Describe("HyperconvergedController", func() {
 				hco := commontestutils.NewHco()
 				hco.Spec.FeatureGates = featuregates.HyperConvergedFeatureGates{
 					{Name: "downwardMetrics"},
-					{Name: "videoConfig"},
 				}
 
 				ci := hcoutil.GetClusterInfo()
@@ -207,13 +206,13 @@ var _ = Describe("HyperconvergedController", func() {
 				expectedFeatureGates := []string{
 					"CPUManager",
 					"Snapshot",
-					"HotplugVolumes",
+					"DeclarativeHotplugVolumes",
 					"HostDevices",
 					"HypervStrictCheck",
 					"DownwardMetrics",
 					"KubevirtSeccompProfile",
-					"VideoConfig",
 					"DecentralizedLiveMigration",
+					"Template",
 				}
 				// Get the KV
 				kvList := &kubevirtcorev1.KubeVirtList{}
@@ -245,7 +244,7 @@ var _ = Describe("HyperconvergedController", func() {
 						foundResource),
 				).ToNot(HaveOccurred())
 				// Check conditions
-				Expect(foundResource.Status.RelatedObjects).To(HaveLen(39))
+				Expect(foundResource.Status.RelatedObjects).To(HaveLen(32))
 				expectedRef := corev1.ObjectReference{
 					Kind:            "PrometheusRule",
 					Namespace:       namespace,
