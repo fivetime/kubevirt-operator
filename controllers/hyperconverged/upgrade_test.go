@@ -54,14 +54,14 @@ var _ = Describe("Upgrade Mode", func() {
 		fakeownresources.OLMV0OwnResourcesMock()
 
 		origOperatorCondVarName := os.Getenv(hcoutil.OperatorConditionNameEnvVar)
-		origVirtIOWinContainer := os.Getenv("VIRTIOWIN_CONTAINER")
+		origVirtIOWinContainer := os.Getenv(hcoutil.VirtioWinImageEnvV)
 		origVersion := os.Getenv(hcoutil.HcoKvIoVersionName)
 
 		hcoutil.GetClusterInfo = func() hcoutil.ClusterInfo {
 			return commontestutils.ClusterInfoMock{}
 		}
 		Expect(os.Setenv(hcoutil.OperatorConditionNameEnvVar, "OPERATOR_CONDITION")).To(Succeed())
-		Expect(os.Setenv("VIRTIOWIN_CONTAINER", commontestutils.VirtioWinImage)).To(Succeed())
+		Expect(os.Setenv(hcoutil.VirtioWinImageEnvV, commontestutils.VirtioWinImage)).To(Succeed())
 		Expect(os.Setenv(hcoutil.HcoKvIoVersionName, version.Version)).To(Succeed())
 
 		reqresolver.GeneratePlaceHolders()
@@ -111,7 +111,7 @@ var _ = Describe("Upgrade Mode", func() {
 			fakeownresources.ResetOwnResources()
 
 			Expect(os.Setenv(hcoutil.OperatorConditionNameEnvVar, origOperatorCondVarName)).To(Succeed())
-			Expect(os.Setenv("VIRTIOWIN_CONTAINER", origVirtIOWinContainer)).To(Succeed())
+			Expect(os.Setenv(hcoutil.VirtioWinImageEnvV, origVirtIOWinContainer)).To(Succeed())
 			Expect(os.Setenv(hcoutil.HcoKvIoVersionName, origVersion)).To(Succeed())
 		})
 	})
@@ -601,6 +601,32 @@ var _ = Describe("Upgrade Mode", func() {
 			Expect(requeue).To(BeFalse())
 			Expect(foundResource.Spec.Virtualization.VirtualMachineOptions.DisableFreePageReporting).To(HaveValue(BeTrue()))
 		})
+
+		It("should update completionTimeoutPerGiB from old default on upgrade", func() {
+			UpdateVersion(&expected.hco.Status, hcoVersionName, "1.18.5")
+			expected.hco.Spec.Virtualization.LiveMigrationConfig.CompletionTimeoutPerGiB = ptr.To[int64](150)
+
+			cl := expected.initClient()
+			_, reconciler, requeue := doReconcile(cl, expected.hco, nil)
+			Expect(requeue).To(BeTrue())
+			foundResource, _, requeue := doReconcile(cl, expected.hco, reconciler)
+			Expect(requeue).To(BeTrue())
+			_, _, requeue = doReconcile(cl, expected.hco, reconciler)
+			Expect(requeue).To(BeFalse())
+			Expect(foundResource.Spec.Virtualization.LiveMigrationConfig.CompletionTimeoutPerGiB).To(HaveValue(BeEquivalentTo(20)))
+		})
+
+		It("should not update completionTimeoutPerGiB when user customized the value", func() {
+			UpdateVersion(&expected.hco.Status, hcoVersionName, "1.18.5")
+			expected.hco.Spec.Virtualization.LiveMigrationConfig.CompletionTimeoutPerGiB = ptr.To[int64](800)
+
+			cl := expected.initClient()
+			_, reconciler, requeue := doReconcile(cl, expected.hco, nil)
+			Expect(requeue).To(BeTrue())
+			foundResource, _, requeue := doReconcile(cl, expected.hco, reconciler)
+			Expect(requeue).To(BeFalse())
+			Expect(foundResource.Spec.Virtualization.LiveMigrationConfig.CompletionTimeoutPerGiB).To(HaveValue(BeEquivalentTo(800)))
+		})
 	})
 
 	Context("remove old quickstart guides", func() {
@@ -688,6 +714,7 @@ var _ = Describe("Upgrade Mode", func() {
 
 	Context("remove leftovers on upgrades", func() {
 		const cniName = "passt-binding-cni"
+		const iommufdName = "iommufd-device-plugin"
 
 		var (
 			dsToBeRemoved     *appsv1.DaemonSet
@@ -698,6 +725,10 @@ var _ = Describe("Upgrade Mode", func() {
 			nadToNotBeRemoved *unstructured.Unstructured
 			saToNotBeRemoved  *corev1.ServiceAccount
 			sccToNotBeRemoved *securityv1.SecurityContextConstraints
+
+			iommufdDsToBeRemoved  *appsv1.DaemonSet
+			iommufdSaToBeRemoved  *corev1.ServiceAccount
+			iommufdSccToBeRemoved *securityv1.SecurityContextConstraints
 
 			resources []client.Object
 		)
@@ -777,6 +808,33 @@ var _ = Describe("Upgrade Mode", func() {
 				},
 			}
 
+			iommufdDsToBeRemoved = &appsv1.DaemonSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      iommufdName,
+					Namespace: namespace,
+					Labels: map[string]string{
+						hcoutil.AppLabel: expected.hco.Name,
+					},
+				},
+			}
+			iommufdSaToBeRemoved = &corev1.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      iommufdName,
+					Namespace: namespace,
+					Labels: map[string]string{
+						hcoutil.AppLabel: expected.hco.Name,
+					},
+				},
+			}
+			iommufdSccToBeRemoved = &securityv1.SecurityContextConstraints{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: iommufdName,
+					Labels: map[string]string{
+						hcoutil.AppLabel: expected.hco.Name,
+					},
+				},
+			}
+
 			resources = append(expected.toArray(),
 				dsToBeRemoved,
 				nadToBeRemoved,
@@ -786,6 +844,9 @@ var _ = Describe("Upgrade Mode", func() {
 				nadToNotBeRemoved,
 				saToNotBeRemoved,
 				sccToNotBeRemoved,
+				iommufdDsToBeRemoved,
+				iommufdSaToBeRemoved,
+				iommufdSccToBeRemoved,
 			)
 		})
 		It("should remove passt objects when upgrading from < 1.19.0", func(ctx context.Context) {
@@ -930,6 +991,81 @@ var _ = Describe("Upgrade Mode", func() {
 			Expect(cl.Get(ctx, client.ObjectKeyFromObject(nadToNotBeRemoved), foundNAD)).To(Succeed())
 			Expect(cl.Get(ctx, client.ObjectKeyFromObject(saToNotBeRemoved), foundSA)).To(Succeed())
 			Expect(cl.Get(ctx, client.ObjectKeyFromObject(sccToNotBeRemoved), foundSCC)).To(Succeed())
+		})
+
+		It("should remove iommufd-device-plugin objects when upgrading from < 1.19.0", func(ctx context.Context) {
+			iommufdRelatedObjects := []corev1.ObjectReference{
+				{
+					APIVersion:      "apps/v1",
+					Kind:            "DaemonSet",
+					Name:            iommufdDsToBeRemoved.Name,
+					Namespace:       iommufdDsToBeRemoved.Namespace,
+					ResourceVersion: "999",
+				},
+				{
+					APIVersion:      "v1",
+					Kind:            "ServiceAccount",
+					Name:            iommufdSaToBeRemoved.GetName(),
+					Namespace:       iommufdSaToBeRemoved.GetNamespace(),
+					ResourceVersion: "999",
+				},
+				{
+					APIVersion:      "security.openshift.io/v1",
+					Kind:            "SecurityContextConstraints",
+					Name:            iommufdSccToBeRemoved.GetName(),
+					ResourceVersion: "999",
+				},
+			}
+
+			UpdateVersion(&expected.hco.Status, hcoVersionName, "1.18.99")
+
+			for _, objRef := range iommufdRelatedObjects {
+				Expect(objectreferencesv1.SetObjectReference(&expected.hco.Status.RelatedObjects, objRef)).ToNot(HaveOccurred())
+			}
+
+			cl := commontestutils.InitClient(resources)
+
+			foundResource, reconciler, requeue := doReconcile(cl, expected.hco, nil)
+			Expect(requeue).To(BeTrue())
+			checkAvailability(foundResource, metav1.ConditionTrue)
+
+			foundResource, _, requeue = doReconcile(cl, expected.hco, reconciler)
+			Expect(requeue).To(BeFalse())
+			checkAvailability(foundResource, metav1.ConditionTrue)
+
+			foundDS := &appsv1.DaemonSet{}
+			foundSA := &corev1.ServiceAccount{}
+			foundSCC := &securityv1.SecurityContextConstraints{}
+
+			err := cl.Get(ctx, client.ObjectKeyFromObject(iommufdDsToBeRemoved), foundDS)
+			Expect(err).To(MatchError(apierrors.IsNotFound, "not found error"))
+
+			err = cl.Get(ctx, client.ObjectKeyFromObject(iommufdSaToBeRemoved), foundSA)
+			Expect(err).To(MatchError(apierrors.IsNotFound, "not found error"))
+
+			err = cl.Get(ctx, client.ObjectKeyFromObject(iommufdSccToBeRemoved), foundSCC)
+			Expect(err).To(MatchError(apierrors.IsNotFound, "not found error"))
+
+			for _, objRef := range iommufdRelatedObjects {
+				Expect(foundResource.Status.RelatedObjects).ToNot(ContainElement(objRef))
+			}
+		})
+
+		It("should not remove iommufd-device-plugin objects when upgrading from >= 1.19.0", func(ctx context.Context) {
+			UpdateVersion(&expected.hco.Status, hcoVersionName, "1.19.0")
+
+			cl := commontestutils.InitClient(resources)
+			foundResource, _, requeue := doReconcile(cl, expected.hco, nil)
+			Expect(requeue).To(BeFalse())
+			checkAvailability(foundResource, metav1.ConditionTrue)
+
+			foundDS := &appsv1.DaemonSet{}
+			foundSA := &corev1.ServiceAccount{}
+			foundSCC := &securityv1.SecurityContextConstraints{}
+
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(iommufdDsToBeRemoved), foundDS)).To(Succeed())
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(iommufdSaToBeRemoved), foundSA)).To(Succeed())
+			Expect(cl.Get(ctx, client.ObjectKeyFromObject(iommufdSccToBeRemoved), foundSCC)).To(Succeed())
 		})
 	})
 

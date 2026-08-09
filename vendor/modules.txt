@@ -200,7 +200,7 @@ github.com/gobuffalo/flect
 # github.com/golang-jwt/jwt/v5 v5.3.1
 ## explicit; go 1.21
 github.com/golang-jwt/jwt/v5
-# github.com/google/cel-go v0.27.0
+# github.com/google/cel-go v0.29.0
 ## explicit; go 1.23.0
 github.com/google/cel-go/cel
 github.com/google/cel-go/checker
@@ -1125,7 +1125,7 @@ k8s.io/utils/pointer
 k8s.io/utils/ptr
 k8s.io/utils/third_party/forked/golang/btree
 k8s.io/utils/trace
-# kubevirt.io/api v1.9.0-rc.1
+# kubevirt.io/api v1.9.0
 ## explicit; go 1.24.0
 kubevirt.io/api/backup
 kubevirt.io/api/backup/v1alpha1
@@ -1135,7 +1135,7 @@ kubevirt.io/api/core/v1
 ## explicit; go 1.24.0
 kubevirt.io/application-aware-quota/staging/src/kubevirt.io/application-aware-quota-api/pkg/apis/core
 kubevirt.io/application-aware-quota/staging/src/kubevirt.io/application-aware-quota-api/pkg/apis/core/v1alpha1
-# kubevirt.io/containerized-data-importer-api v1.65.0
+# kubevirt.io/containerized-data-importer-api v1.66.0
 ## explicit; go 1.24.0
 kubevirt.io/containerized-data-importer-api/pkg/apis/core
 kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1

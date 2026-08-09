@@ -52,6 +52,7 @@ spec:
               deployment:
                 applicationAwareConfig:
                   enable: false
+                deployNetworkResourcesInjector: true
                 deployVmConsoleProxy: false
                 uninstallStrategy: BlockUninstallIfWorkloadsExist
               security:
@@ -66,9 +67,9 @@ spec:
                 liveMigrationConfig:
                   allowAutoConverge: false
                   allowPostCopy: false
-                  completionTimeoutPerGiB: 150
+                  completionTimeoutPerGiB: 20
                   parallelMigrationsPerCluster: 5
-                  parallelOutboundMigrationsPerNode: 2
+                  parallelOutboundMigrationsPerNode: 1
                   progressTimeout: 150
                 virtualMachineOptions:
                   disableFreePageReporting: false
@@ -82,6 +83,7 @@ spec:
                 default:
                   applicationAwareConfig:
                     enable: false
+                  deployNetworkResourcesInjector: true
                   deployVmConsoleProxy: false
                   uninstallStrategy: BlockUninstallIfWorkloadsExist
                 description: Deployment contains all the configurations related to
@@ -161,6 +163,7 @@ spec:
                         type: string
                     type: object
                   deployNetworkResourcesInjector:
+                    default: true
                     description: |-
                       DeployNetworkResourcesInjector enables deployment of the network-resources-injector component.
                       When enabled, the network-resources-injector mutating webhook will be deployed to automatically
@@ -2226,7 +2229,7 @@ spec:
                     DecentralizedLiveMigration enables the decentralized live migration
                     (cross-cluster migration) feature. This feature allows live migration of
                     VirtualMachineInstances between different clusters. This feature is in
-                    Developer Preview.
+                    Tech Preview.
                     Phase: beta
 
                   * declarativeHotplugVolumes:
@@ -2262,22 +2265,21 @@ spec:
                     Deploy KubeSecondaryDNS by CNAO
                     Phase: alpha
 
-                  * downwardMetrics:
-                    Allow to expose a limited set of host metrics to guests.
+                  * deployObservabilityController:
+                    Deploy the virt-observability-controller component. When enabled, the
+                    controller exposes KubeVirt metrics and manages PrometheusRule resources
+                    independently from the KubeVirt control plane.
                     Phase: alpha
 
-                  * enableMultiArchBootImageImport:
-                    EnableMultiArchBootImageImport allows the HCO to run on heterogeneous
-                    clusters with different CPU architectures. Setting this field to true will
-                    allow the HCO to create Golden Images for different CPU architectures.
-                    This feature is in Developer Preview.
+                  * downwardMetrics:
+                    Allow to expose a limited set of host metrics to guests.
                     Phase: alpha
 
                   * incrementalBackup:
                     IncrementalBackup enables changed block tracking backups and incremental
                     backups using QEMU capabilities in KubeVirt. When enabled, this also
                     enables the UtilityVolumes feature gate in the KubeVirt CR. Note: This
-                    feature is in Tech Preview.
+                    feature is in Developer Preview.
                     Phase: alpha
 
                   * objectGraph:
@@ -2287,19 +2289,23 @@ spec:
                     This feature is in Developer Preview.
                     Phase: alpha
 
-                  * persistentReservation:
-                    Enable persistent reservation of a LUN through the SCSI Persistent Reserve
-                    commands on Kubevirt. In order to issue privileged SCSI ioctls, the VM
-                    requires activation of the persistent reservation flag. Once this feature
-                    gate is enabled, then the additional container with the qemu-pr-helper is
-                    deployed inside the virt-handler pod. Enabling (or removing) the feature
-                    gate causes the redeployment of the virt-handler pod.
-                    Phase: alpha
-
                   * disableMDevConfiguration:
-                    Deprecated: use spec.virtualization.mediatedDevicesConfiguration.enabled
+                    Deprecated: This feature gate has graduated to a dedicated configuration
+                    field; use spec.virtualization.mediatedDevicesConfiguration.enabled
                     instead. This feature gate is deprecated and will be removed in a future
                     release.
+                    Phase: deprecated
+
+                  * enableMultiArchBootImageImport:
+                    Deprecated: This feature gate has graduated to a dedicated configuration
+                    field; use spec.workloadSources.enableMultiArchBootImageImport instead.
+                    This feature gate is deprecated and will be removed in a future release.
+                    Phase: deprecated
+
+                  * persistentReservation:
+                    This feature gate has graduated to a dedicated configuration field. Use
+                    spec.storage.persistentReservationConfiguration.enabled instead. This
+                    feature gate is deprecated and will be removed in a future release.
                     Phase: deprecated
                 items:
                   description: FeatureGate is an optional feature gate to enable or
@@ -2427,6 +2433,49 @@ spec:
                     description: |-
                       NetworkBinding defines the network binding plugins.
                       Those bindings can be used when defining virtual machine interfaces.
+                    type: object
+                type: object
+              observability:
+                description: Observability contains configurations for the observability
+                  controller
+                properties:
+                  allowedAlerts:
+                    description: |-
+                      AllowedAlerts defines the list of alert rule names to include.
+                      When set, only alerts matching this list will be created.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                    x-kubernetes-validations:
+                    - message: '''none'' cannot be combined with other values'
+                      rule: (self.size() <= 1) || !self.exists(r, (r == 'none'))
+                  allowedRecordingRules:
+                    description: |-
+                      AllowedRecordingRules defines the list of recording rule names to include.
+                      When set, only recording rules matching this list will be created.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                    x-kubernetes-validations:
+                    - message: '''none'' cannot be combined with other values'
+                      rule: (self.size() <= 1) || !self.exists(r, (r == 'none'))
+                  workloads:
+                    description: Workloads defines filtering configuration for workload-related
+                      metrics
+                    properties:
+                      allowedMetrics:
+                        description: |-
+                          AllowedMetrics defines the list of metric names to expose.
+                          When set, only metrics matching this list will be collected.
+                        items:
+                          type: string
+                        type: array
+                        x-kubernetes-list-type: atomic
+                        x-kubernetes-validations:
+                        - message: '''none'' cannot be combined with other values'
+                          rule: (self.size() <= 1) || !self.exists(r, (r == 'none'))
                     type: object
                 type: object
               security:
@@ -2658,6 +2707,17 @@ spec:
                           global value
                         type: object
                     type: object
+                  persistentReservationConfiguration:
+                    description: |-
+                      PersistentReservationConfiguration controls the deployment of additional resources
+                      required for using SCSI persistent reservation in VMs
+                    properties:
+                      enabled:
+                        description: |-
+                          Enabled controls the deployment of additional resources like the pr-helper container
+                          for enabling the use of the SCSI persistent reservation in VMs, defaults to false.
+                        type: boolean
+                    type: object
                   scratchSpaceStorageClass:
                     description: |-
                       Override the storage class used for scratch space during transfer operations. The scratch space storage class
@@ -2750,9 +2810,10 @@ spec:
                   liveMigrationConfig:
                     allowAutoConverge: false
                     allowPostCopy: false
-                    completionTimeoutPerGiB: 150
+                    allowWorkloadDisruption: false
+                    completionTimeoutPerGiB: 20
                     parallelMigrationsPerCluster: 5
-                    parallelOutboundMigrationsPerNode: 2
+                    parallelOutboundMigrationsPerNode: 1
                     progressTimeout: 150
                   virtualMachineOptions:
                     disableFreePageReporting: false
@@ -3023,9 +3084,10 @@ spec:
                     default:
                       allowAutoConverge: false
                       allowPostCopy: false
-                      completionTimeoutPerGiB: 150
+                      allowWorkloadDisruption: false
+                      completionTimeoutPerGiB: 20
                       parallelMigrationsPerCluster: 5
-                      parallelOutboundMigrationsPerNode: 2
+                      parallelOutboundMigrationsPerNode: 1
                       progressTimeout: 150
                     description: |-
                       Live migration limits and timeouts are applied so that migration processes do not
@@ -3049,13 +3111,22 @@ spec:
                           alive.
                           Defaults to false.
                         type: boolean
+                      allowWorkloadDisruption:
+                        default: false
+                        description: |-
+                          AllowWorkloadDisruption indicates that the migration shouldn't be
+                          canceled after the acceptable completion time is exceeded. Instead, if
+                          permitted, migration will be switched to post-copy or the VMI will be
+                          paused to allow the migration to complete.
+                          Defaults to false.
+                        type: boolean
                       bandwidthPerMigration:
                         description: Bandwidth limit of each migration, the value
                           is quantity of bytes per second (e.g. 2048Mi = 2048MiB/sec)
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         type: string
                       completionTimeoutPerGiB:
-                        default: 150
+                        default: 20
                         description: |-
                           If a migrating VM is big and busy, while the connection to the destination node
                           is slow, migration may never converge. The completion timeout is calculated
@@ -3081,8 +3152,12 @@ spec:
                         format: int32
                         type: integer
                       parallelOutboundMigrationsPerNode:
-                        default: 2
-                        description: Maximum number of outbound migrations per node.
+                        default: 1
+                        description: |-
+                          The maximum number of outbound migrations allowed simultaneously per node.
+                          Setting this to 1 (default) ensures maximum available bandwidth per migration.
+                          Higher values accelerate node drains through parallel operations, but increase
+                          the risk of busy VMs failing due to network congestion.
                         format: int32
                         type: integer
                       progressTimeout:
@@ -3467,7 +3542,7 @@ spec:
                             retentionPolicy:
                               description: RetentionPolicy specifies whether the created
                                 DataVolumes and DataSources are retained when their
-                                DataImportCron is deleted. Default is RatainAll.
+                                DataImportCron is deleted. Default is RetainAll.
                               type: string
                             schedule:
                               description: Schedule specifies in cron format when
@@ -3818,6 +3893,11 @@ spec:
                                               items:
                                                 type: string
                                               type: array
+                                            insecureSkipVerify:
+                                              description: InsecureSkipVerify is a
+                                                flag to skip certificate verification
+                                                for the HTTP endpoint
+                                              type: boolean
                                             secretExtraHeaders:
                                               description: SecretExtraHeaders is a
                                                 list of Secret references, each containing
@@ -3978,6 +4058,12 @@ spec:
                                               description: BackingFile is the path
                                                 to the virtual hard disk to migrate
                                                 from vCenter/ESXi
+                                              type: string
+                                            certConfigMap:
+                                              description: CertConfigMap provides
+                                                a reference to a ConfigMap containing
+                                                the certificate authority (CA) certificate
+                                                for the vCenter or ESXi host
                                               type: string
                                             extraArgs:
                                               description: ExtraArgs is a reference
@@ -4265,6 +4351,12 @@ spec:
                       defined) templates that can be added to the dataImportCronTemplates field. This field only controls the common
                       templates. It is possible to use custom templates by adding them to the dataImportCronTemplates field.
                     type: boolean
+                  enableMultiArchBootImageImport:
+                    description: |-
+                      EnableMultiArchBootImageImport allows the HCO to run on heterogeneous
+                      clusters with different CPU architectures. Setting this field to true will
+                      allow the HCO to create Golden Images for different CPU architectures.
+                    type: boolean
                   instancetypeConfig:
                     description: InstancetypeConfig holds the configuration of instance
                       type related functionality within KubeVirt.
@@ -4394,7 +4486,7 @@ spec:
                         retentionPolicy:
                           description: RetentionPolicy specifies whether the created
                             DataVolumes and DataSources are retained when their DataImportCron
-                            is deleted. Default is RatainAll.
+                            is deleted. Default is RetainAll.
                           type: string
                         schedule:
                           description: Schedule specifies in cron format when and
@@ -4738,6 +4830,11 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                        insecureSkipVerify:
+                                          description: InsecureSkipVerify is a flag
+                                            to skip certificate verification for the
+                                            HTTP endpoint
+                                          type: boolean
                                         secretExtraHeaders:
                                           description: SecretExtraHeaders is a list
                                             of Secret references, each containing
@@ -4891,6 +4988,12 @@ spec:
                                           description: BackingFile is the path to
                                             the virtual hard disk to migrate from
                                             vCenter/ESXi
+                                          type: string
+                                        certConfigMap:
+                                          description: CertConfigMap provides a reference
+                                            to a ConfigMap containing the certificate
+                                            authority (CA) certificate for the vCenter
+                                            or ESXi host
                                           type: string
                                         extraArgs:
                                           description: ExtraArgs is a reference to
@@ -5397,16 +5500,14 @@ spec:
                 declarativeHotplugVolumes: true
                 deployKubeSecondaryDNS: false
                 downwardMetrics: false
-                enableMultiArchBootImageImport: false
                 incrementalBackup: false
                 objectGraph: false
-                persistentReservation: false
               liveMigrationConfig:
                 allowAutoConverge: false
                 allowPostCopy: false
-                completionTimeoutPerGiB: 150
+                completionTimeoutPerGiB: 20
                 parallelMigrationsPerCluster: 5
-                parallelOutboundMigrationsPerNode: 2
+                parallelOutboundMigrationsPerNode: 1
                 progressTimeout: 150
               resourceRequirements:
                 vmiCPUAllocationRatio: 10
@@ -5710,7 +5811,7 @@ spec:
                         retentionPolicy:
                           description: RetentionPolicy specifies whether the created
                             DataVolumes and DataSources are retained when their DataImportCron
-                            is deleted. Default is RatainAll.
+                            is deleted. Default is RetainAll.
                           type: string
                         schedule:
                           description: Schedule specifies in cron format when and
@@ -6054,6 +6155,11 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                        insecureSkipVerify:
+                                          description: InsecureSkipVerify is a flag
+                                            to skip certificate verification for the
+                                            HTTP endpoint
+                                          type: boolean
                                         secretExtraHeaders:
                                           description: SecretExtraHeaders is a list
                                             of Secret references, each containing
@@ -6207,6 +6313,12 @@ spec:
                                           description: BackingFile is the path to
                                             the virtual hard disk to migrate from
                                             vCenter/ESXi
+                                          type: string
+                                        certConfigMap:
+                                          description: CertConfigMap provides a reference
+                                            to a ConfigMap containing the certificate
+                                            authority (CA) certificate for the vCenter
+                                            or ESXi host
                                           type: string
                                         extraArgs:
                                           description: ExtraArgs is a reference to
@@ -6535,10 +6647,8 @@ spec:
                   declarativeHotplugVolumes: true
                   deployKubeSecondaryDNS: false
                   downwardMetrics: false
-                  enableMultiArchBootImageImport: false
                   incrementalBackup: false
                   objectGraph: false
-                  persistentReservation: false
                 description: |-
                   featureGates is a map of feature gate flags. Setting a flag to `true` will enable
                   the feature. Setting `false` or removing the feature gate, disables the feature.
@@ -6564,7 +6674,7 @@ spec:
                     description: |-
                       DecentralizedLiveMigration enables the decentralized live migration (cross-cluster migration) feature.
                       This feature allows live migration of VirtualMachineInstances between different clusters.
-                      This feature is in Developer Preview.
+                      This feature is in Tech Preview.
                     type: boolean
                   declarativeHotplugVolumes:
                     default: true
@@ -6612,19 +6722,19 @@ spec:
                     description: 'Deprecated: This feature gate is ignored.'
                     type: boolean
                   enableMultiArchBootImageImport:
-                    default: false
                     description: |-
                       EnableMultiArchBootImageImport allows the HCO to run on heterogeneous clusters with different CPU architectures.
                       Setting this field to true will allow the HCO to create Golden Images for different CPU architectures.
-
-                      This feature is in Developer Preview.
+                      This feature gate has graduated to a dedicated configuration field.
+                      Deprecated: use v1's spec.workloadSources.enableMultiArchBootImageImport instead. This feature gate will be removed in
+                      a future release.
                     type: boolean
                   incrementalBackup:
                     default: false
                     description: |-
                       IncrementalBackup enables changed block tracking backups and incremental backups using QEMU capabilities in KubeVirt.
                       When enabled, this also enables the UtilityVolumes feature gate in the KubeVirt CR.
-                      Note: This feature is in Tech Preview.
+                      Note: This feature is in Developer Preview.
                     type: boolean
                   nonRoot:
                     description: 'Deprecated: This feature gate is ignored.'
@@ -6637,12 +6747,9 @@ spec:
                       Note: This feature is in Developer Preview.
                     type: boolean
                   persistentReservation:
-                    default: false
                     description: |-
-                      Enable persistent reservation of a LUN through the SCSI Persistent Reserve commands on Kubevirt.
-                      In order to issue privileged SCSI ioctls, the VM requires activation of the persistent reservation flag.
-                      Once this feature gate is enabled, then the additional container with the qemu-pr-helper is deployed inside the virt-handler pod.
-                      Enabling (or removing) the feature gate causes the redeployment of the virt-handler pod.
+                      This feature gate has graduated to a dedicated configuration field.
+                      Deprecated: use v1's spec.storage.persistentReservationConfiguration.enabled instead. This feature gate will be removed in a future release.
                     type: boolean
                   primaryUserDefinedNetworkBinding:
                     description: 'Deprecated: this feature gate is ignored.'
@@ -7810,9 +7917,9 @@ spec:
                 default:
                   allowAutoConverge: false
                   allowPostCopy: false
-                  completionTimeoutPerGiB: 150
+                  completionTimeoutPerGiB: 20
                   parallelMigrationsPerCluster: 5
-                  parallelOutboundMigrationsPerNode: 2
+                  parallelOutboundMigrationsPerNode: 1
                   progressTimeout: 150
                 description: |-
                   Live migration limits and timeouts are applied so that migration processes do not
@@ -7836,13 +7943,22 @@ spec:
                       alive.
                       Defaults to false.
                     type: boolean
+                  allowWorkloadDisruption:
+                    default: false
+                    description: |-
+                      AllowWorkloadDisruption indicates that the migration shouldn't be
+                      canceled after the acceptable completion time is exceeded. Instead, if
+                      permitted, migration will be switched to post-copy or the VMI will be
+                      paused to allow the migration to complete.
+                      Defaults to false.
+                    type: boolean
                   bandwidthPerMigration:
                     description: Bandwidth limit of each migration, the value is quantity
                       of bytes per second (e.g. 2048Mi = 2048MiB/sec)
                     pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                     type: string
                   completionTimeoutPerGiB:
-                    default: 150
+                    default: 20
                     description: |-
                       If a migrating VM is big and busy, while the connection to the destination node
                       is slow, migration may never converge. The completion timeout is calculated
@@ -7867,8 +7983,12 @@ spec:
                     format: int32
                     type: integer
                   parallelOutboundMigrationsPerNode:
-                    default: 2
-                    description: Maximum number of outbound migrations per node.
+                    default: 1
+                    description: |-
+                      The maximum number of outbound migrations allowed simultaneously per node.
+                      Setting this to 1 (default) ensures maximum available bandwidth per migration.
+                      Higher values accelerate node drains through parallel operations, but increase
+                      the risk of busy VMs failing due to network congestion.
                     format: int32
                     type: integer
                   progressTimeout:
@@ -9719,7 +9839,7 @@ spec:
                         retentionPolicy:
                           description: RetentionPolicy specifies whether the created
                             DataVolumes and DataSources are retained when their DataImportCron
-                            is deleted. Default is RatainAll.
+                            is deleted. Default is RetainAll.
                           type: string
                         schedule:
                           description: Schedule specifies in cron format when and
@@ -10063,6 +10183,11 @@ spec:
                                           items:
                                             type: string
                                           type: array
+                                        insecureSkipVerify:
+                                          description: InsecureSkipVerify is a flag
+                                            to skip certificate verification for the
+                                            HTTP endpoint
+                                          type: boolean
                                         secretExtraHeaders:
                                           description: SecretExtraHeaders is a list
                                             of Secret references, each containing
@@ -10216,6 +10341,12 @@ spec:
                                           description: BackingFile is the path to
                                             the virtual hard disk to migrate from
                                             vCenter/ESXi
+                                          type: string
+                                        certConfigMap:
+                                          description: CertConfigMap provides a reference
+                                            to a ConfigMap containing the certificate
+                                            authority (CA) certificate for the vCenter
+                                            or ESXi host
                                           type: string
                                         extraArgs:
                                           description: ExtraArgs is a reference to

@@ -101,6 +101,7 @@ func randomV1beta1HC(r *rand.Rand) *HyperConverged {
 				ProgressTimeout:                   randPtr(r, r.Int64()),
 				AllowAutoConverge:                 randPtr(r, r.IntN(2) == 1),
 				AllowPostCopy:                     randPtr(r, r.IntN(2) == 1),
+				AllowWorkloadDisruption:           randPtr(r, r.IntN(2) == 1),
 			},
 			WorkloadUpdateStrategy: hcov1.HyperConvergedWorkloadUpdateStrategy{
 				WorkloadUpdateMethods: randStringSlice(r),
@@ -148,6 +149,14 @@ func randomV1beta1HC(r *rand.Rand) *HyperConverged {
 
 	if r.IntN(2) == 1 {
 		hc.Spec.FeatureGates.DisableMDevConfiguration = randPtr(r, r.IntN(2) == 1)
+	}
+
+	if r.IntN(2) == 1 {
+		hc.Spec.FeatureGates.PersistentReservation = randPtr(r, r.IntN(2) == 1)
+	}
+
+	if r.IntN(2) == 1 {
+		hc.Spec.FeatureGates.EnableMultiArchBootImageImport = randPtr(r, r.IntN(2) == 1)
 	}
 
 	if r.IntN(2) == 1 {
@@ -315,6 +324,7 @@ func randomV1HC(r *rand.Rand) *hcov1.HyperConverged {
 					ProgressTimeout:                   randPtr(r, r.Int64()),
 					AllowAutoConverge:                 randPtr(r, r.IntN(2) == 1),
 					AllowPostCopy:                     randPtr(r, r.IntN(2) == 1),
+					AllowWorkloadDisruption:           randPtr(r, r.IntN(2) == 1),
 				},
 				WorkloadUpdateStrategy: hcov1.HyperConvergedWorkloadUpdateStrategy{
 					WorkloadUpdateMethods: randStringSlice(r),
@@ -424,6 +434,11 @@ func randomV1HC(r *rand.Rand) *hcov1.HyperConverged {
 				InsecureRegistries: randStringSlice(r),
 			}
 		}
+		if r.IntN(2) == 1 {
+			hc.Spec.Storage.PersistentReservationConfiguration = &hcov1.PersistentReservationConfiguration{
+				Enabled: randPtr(r, r.IntN(2) == 1),
+			}
+		}
 	}
 
 	hc.Spec.Security.CertConfig = hcov1.HyperConvergedCertConfig{
@@ -475,6 +490,7 @@ func randomV1HC(r *rand.Rand) *hcov1.HyperConverged {
 	hc.Spec.WorkloadSources.CommonTemplatesNamespace = randPtr(r, randString(r))
 	hc.Spec.WorkloadSources.CommonBootImageNamespace = randPtr(r, randString(r))
 	hc.Spec.WorkloadSources.EnableCommonBootImageImport = randPtr(r, r.IntN(2) == 1)
+	hc.Spec.WorkloadSources.EnableMultiArchBootImageImport = randPtr(r, r.IntN(2) == 1)
 
 	if r.IntN(2) == 1 {
 		hc.Spec.WorkloadSources.DataImportCronTemplates = []hcov1.DataImportCronTemplate{
@@ -515,6 +531,18 @@ func randomV1HC(r *rand.Rand) *hcov1.HyperConverged {
 
 	if r.IntN(2) == 1 {
 		hc.Spec.Deployment.DeployNetworkResourcesInjector = new(r.IntN(2) == 1)
+	}
+
+	if r.IntN(2) == 1 {
+		hc.Spec.Observability = &hcov1.ObservabilityConfig{
+			AllowedAlerts:         randStringSlice(r),
+			AllowedRecordingRules: randStringSlice(r),
+		}
+		if r.IntN(2) == 1 {
+			hc.Spec.Observability.Workloads = &hcov1.ObservabilityWorkloadsConfig{
+				AllowedMetrics: randStringSlice(r),
+			}
+		}
 	}
 
 	return hc

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"gomodules.xyz/jsonpatch/v2"
@@ -21,22 +23,15 @@ import (
 )
 
 const (
-	mutatorV1Name = "hyperConverged v1 mutator"
-
-	v1HyperConvergedMdevConfigPath = "/spec/virtualization/mediatedDevicesConfiguration"
-	v1MDevEnabledPath              = v1HyperConvergedMdevConfigPath + "/enabled"
-	disableMDevConfigurationFGName = hcov1beta1.DisableMDevConfigurationFG
-
-	fgDeprecationMsg = "feature gate %s is deprecated; please use the spec.virtualization.mediatedDevicesConfiguration.enabled field instead"
-
-	mdevErrorMessage = "the deprecated disableMDevConfiguration feature gate, and spec.virtualization.mediatedDevicesConfiguration.enabled field contradict each other; disableMDevConfiguration must not be set, or equal !enabled"
+	mutatorV1Name           = "hyperConverged v1 mutator"
+	featureGatesPath        = "/spec/featureGates"
+	singleFeatureGatePrefix = featureGatesPath + "/"
+	featureGatePathTmpt     = singleFeatureGatePrefix + "%d"
 )
 
 var (
 	_ admission.Handler = &HyperConvergedMutator{}
 )
-
-var mdevWarning = fmt.Sprintf(fgDeprecationMsg, disableMDevConfigurationFGName)
 
 // HyperConvergedMutator mutates HyperConverged requests
 type HyperConvergedMutator struct {
@@ -83,15 +78,20 @@ func (hcm *HyperConvergedMutator) mutateHyperConverged(req admission.Request, lo
 	patches = mutateEvictionStrategy(hc, patches)
 	patches = mutateTuningPolicy(hc, patches)
 
-	var (
-		allowed  bool
-		warnings []string
-	)
+	var warnings []string
 
 	switch req.Operation {
 	case admissionv1.Create:
 		patches = getMutatePatchesOnCreate(hc, patches)
-		allowed, warnings, patches = hcMutateV1MDevFGAndEnabledOnCreate(hc, patches)
+
+		for _, fieldAndFG := range fieldFGDetails {
+			allowed, fieldWarnings, newPatches := mutateFieldAndFGOnCreate(hc, fieldAndFG, patches)
+			if !allowed {
+				return admission.Denied(fieldAndFG.contraventionError)
+			}
+			patches = newPatches
+			warnings = append(warnings, fieldWarnings...)
+		}
 
 	case admissionv1.Update:
 		var oldHC *hcov1.HyperConverged
@@ -105,20 +105,25 @@ func (hcm *HyperConvergedMutator) mutateHyperConverged(req admission.Request, lo
 			return admission.Errored(http.StatusBadRequest, fmt.Errorf("failed to parse the old HyperConverged"))
 		}
 
-		allowed, warnings, patches = hcMutateV1MDevFGAndEnabledOnUpdate(hc, oldHC, patches)
+		for _, fieldAndFG := range fieldFGDetails {
+			allowed, fieldWarnings, newPatches := mutateFieldAndFGOnUpdate(hc, oldHC, fieldAndFG, patches)
+			if !allowed {
+				return admission.Denied(fieldAndFG.contraventionError)
+			}
+			patches = newPatches
+			warnings = append(warnings, fieldWarnings...)
+		}
 	}
 
-	return createResponse(allowed, patches, warnings)
+	return createResponse(patches, warnings, len(hc.Spec.FeatureGates))
 }
 
-func createResponse(allowed bool, patches []jsonpatch.JsonPatchOperation, warnings []string) admission.Response {
-	if !allowed {
-		return admission.Denied(mdevErrorMessage)
-	}
-
+func createResponse(patches []jsonpatch.JsonPatchOperation, warnings []string, numFGs int) admission.Response {
 	var response admission.Response
 
 	if len(patches) > 0 {
+		patches = finalizePatches(patches, numFGs)
+
 		response = admission.Patched("mutated", patches...)
 	} else {
 		response = admission.Allowed("")
@@ -216,29 +221,20 @@ func mutateTuningPolicy(hc *hcov1.HyperConverged, patches []jsonpatch.JsonPatchO
 	return patches
 }
 
-func hcV1MDevEnabledValue(hc *hcov1.HyperConverged) (enabled bool, found bool) {
-	mdc := hc.Spec.Virtualization.MediatedDevicesConfiguration
-	if mdc == nil || mdc.Enabled == nil {
-		return true, false
-	}
-
-	return *mdc.Enabled, true
-}
-
-func dropMdevFG(fgs hcov1fg.HyperConvergedFeatureGates, patches []jsonpatch.JsonPatchOperation) []jsonpatch.JsonPatchOperation {
+func dropFeatureGate(fgName string, fgs hcov1fg.HyperConvergedFeatureGates, patches []jsonpatch.JsonPatchOperation) []jsonpatch.JsonPatchOperation {
 	if len(fgs) == 0 {
 		return patches
 	}
 
-	idx := fgs.Index(disableMDevConfigurationFGName)
+	idx := fgs.Index(fgName)
 
 	if idx < 0 {
 		return patches
 	}
 
-	path := "/spec/featureGates"
+	path := featureGatesPath
 	if len(fgs) > 1 {
-		path = fmt.Sprintf(path+"/%d", idx)
+		path = fmt.Sprintf(featureGatePathTmpt, idx)
 	}
 
 	return append(patches, jsonpatch.JsonPatchOperation{
@@ -247,92 +243,119 @@ func dropMdevFG(fgs hcov1fg.HyperConvergedFeatureGates, patches []jsonpatch.Json
 	})
 }
 
-func hcMutateV1MDevFGAndEnabledOnCreate(hc *hcov1.HyperConverged, patches []jsonpatch.JsonPatchOperation) (allowed bool, warning []string, newPatches []jsonpatch.JsonPatchOperation) {
-	fgEnabled, fgExists := hc.Spec.FeatureGates.IsExplicitlyEnabled(disableMDevConfigurationFGName)
+func mutateFieldAndFGOnCreate(hc *hcov1.HyperConverged, fieldAndFG fieldFGDetailsType, patches []jsonpatch.JsonPatchOperation) (allowed bool, warning []string, newPatches []jsonpatch.JsonPatchOperation) {
+	fgEnabled, fgExists := hc.Spec.FeatureGates.IsExplicitlyEnabled(fieldAndFG.fgName)
 	if !fgExists {
 		return true, nil, patches
 	}
 
-	mdc := hc.Spec.Virtualization.MediatedDevicesConfiguration
-	if mdc != nil && mdc.Enabled != nil {
-		if fgEnabled == *mdc.Enabled {
-			//nolint:staticcheck
-			// this is a bug in the staticcheck linter. fmt.Errorf may be used with no parameters
+	enabled, found := fieldAndFG.getFieldValue(hc)
+	if found {
+		if (fgEnabled == enabled) != fieldAndFG.fgShouldEqualField {
 			return false, nil, nil
 		}
-		return true, []string{mdevWarning}, patches
+		return true, []string{fieldAndFG.deprecationWarning}, patches
 	}
 
-	return true, []string{mdevWarning}, mutateMdevEnabled(mdc, !fgEnabled, patches)
+	val := fgEnabled == fieldAndFG.fgShouldEqualField
+	return true, []string{fieldAndFG.deprecationWarning}, fieldAndFG.mutateField(hc.Spec, val, patches)
 }
 
-func mutateMdevEnabled(
-	mdevConfig *hcov1.MediatedDevicesConfiguration,
-	fieldVal bool,
-	patches []jsonpatch.JsonPatchOperation,
-) []jsonpatch.JsonPatchOperation {
-
-	if mdevConfig != nil {
-		return append(patches, jsonpatch.JsonPatchOperation{
-			Operation: "add",
-			Path:      v1MDevEnabledPath,
-			Value:     fieldVal,
-		})
-	}
-
-	return append(patches, jsonpatch.JsonPatchOperation{
-		Operation: "add",
-		Path:      v1HyperConvergedMdevConfigPath,
-		Value:     map[string]any{"enabled": fieldVal},
-	})
-}
-
-func hcMutateV1MDevFGAndEnabledOnUpdate(hc, oldHC *hcov1.HyperConverged, patches []jsonpatch.JsonPatchOperation) (allow bool, warningList []string, newPatches []jsonpatch.JsonPatchOperation) {
-	newFGEnabled, newFGPresent := hc.Spec.FeatureGates.IsExplicitlyEnabled(disableMDevConfigurationFGName)
+func mutateFieldAndFGOnUpdate(hc, oldHC *hcov1.HyperConverged, fieldAndFG fieldFGDetailsType, patches []jsonpatch.JsonPatchOperation) (allow bool, warningList []string, newPatches []jsonpatch.JsonPatchOperation) {
+	newFGEnabled, newFGPresent := hc.Spec.FeatureGates.IsExplicitlyEnabled(fieldAndFG.fgName)
 	if !newFGPresent { // if the FG is not set in the requested HC, we need to do nothing
 		return true, nil, patches
 	}
 
-	oldFGEnabled, oldFGPresent := oldHC.Spec.FeatureGates.IsExplicitlyEnabled(disableMDevConfigurationFGName)
+	oldFGEnabled, oldFGPresent := oldHC.Spec.FeatureGates.IsExplicitlyEnabled(fieldAndFG.fgName)
 	fgChanged := !oldFGPresent || (oldFGEnabled != newFGEnabled) // we know newFG is Present
 
-	oldEnabled, oldEnabledFound := hcV1MDevEnabledValue(oldHC)
-	newEnabled, newEnabledFound := hcV1MDevEnabledValue(hc)
+	oldEnabled, oldEnabledFound := fieldAndFG.getFieldValue(oldHC)
+	newEnabled, newEnabledFound := fieldAndFG.getFieldValue(hc)
 
 	enabledChanged := oldEnabled != newEnabled || oldEnabledFound != newEnabledFound
 
+	fgChangesLogic := (newEnabled == newFGEnabled) != fieldAndFG.fgShouldEqualField
+
 	if fgChanged {
 		if enabledChanged {
-			if newEnabled == newFGEnabled {
+			if fgChangesLogic {
 				return false, nil, nil
 			}
-		} else if newEnabled == newFGEnabled || !newEnabledFound {
+		} else if fgChangesLogic || !newEnabledFound {
 			// set the enabled field
 			enabled := !newEnabled
 			if !newEnabledFound {
-				enabled = !newFGEnabled
+				enabled = newFGEnabled == fieldAndFG.fgShouldEqualField
 			}
 
-			patches = mutateMdevEnabled(hc.Spec.Virtualization.MediatedDevicesConfiguration, enabled, patches)
+			patches = fieldAndFG.mutateField(hc.Spec, enabled, patches)
 		}
 
-		return true, []string{mdevWarning}, patches
+		return true, []string{fieldAndFG.deprecationWarning}, patches
 	}
 
 	// from here, FG was not changed
 	if enabledChanged {
-		return true, nil, dropMdevFG(hc.Spec.FeatureGates, patches)
+		return true, nil, dropFeatureGate(fieldAndFG.fgName, hc.Spec.FeatureGates, patches)
 	}
 
 	// from here, enabled was not changed
 	if !newEnabledFound {
 		// set enabled = !FG
-		return true, nil, mutateMdevEnabled(hc.Spec.Virtualization.MediatedDevicesConfiguration, !newFGEnabled, patches)
+		return true, nil, fieldAndFG.mutateField(hc.Spec, newFGEnabled == fieldAndFG.fgShouldEqualField, patches)
 	}
 
-	if newEnabled == newFGEnabled {
-		return true, nil, dropMdevFG(hc.Spec.FeatureGates, patches)
+	if fgChangesLogic {
+		return true, nil, dropFeatureGate(fieldAndFG.fgName, hc.Spec.FeatureGates, patches)
 	}
 
 	return true, nil, patches
+}
+
+func finalizePatches(patches []jsonpatch.JsonPatchOperation, numFGs int) []jsonpatch.JsonPatchOperation {
+	sortedPatches := make([]jsonpatch.JsonPatchOperation, 0, len(patches))
+	var fgPatches []jsonpatch.JsonPatchOperation
+
+	for _, patch := range patches {
+		if strings.HasPrefix(patch.Path, singleFeatureGatePrefix) {
+			fgPatches = append(fgPatches, patch)
+		} else {
+			sortedPatches = append(sortedPatches, patch)
+		}
+	}
+
+	if len(fgPatches) == 0 {
+		return sortedPatches
+	}
+
+	if numFGs == len(fgPatches) {
+		sortedPatches = append(sortedPatches, jsonpatch.JsonPatchOperation{
+			Operation: "remove",
+			Path:      featureGatesPath,
+		})
+	} else {
+
+		slices.SortFunc(fgPatches, compareFGPatches)
+
+		sortedPatches = append(sortedPatches, fgPatches...)
+	}
+
+	return sortedPatches
+}
+
+func compareFGPatches(a, b jsonpatch.JsonPatchOperation) int {
+	var aIdx, bIdx int
+	_, err := fmt.Sscanf(a.Path, featureGatePathTmpt, &aIdx)
+	if err != nil {
+		// should never happen. No code in this package produces such path
+		return -1
+	}
+	_, err = fmt.Sscanf(b.Path, featureGatePathTmpt, &bIdx)
+	if err != nil {
+		// should never happen. No code in this package produces such path
+		return -1
+	}
+
+	return bIdx - aIdx
 }

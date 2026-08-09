@@ -198,8 +198,7 @@ func schema_kubevirt_hyperconverged_cluster_operator_api_v1beta1_HyperConvergedF
 					},
 					"persistentReservation": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Enable persistent reservation of a LUN through the SCSI Persistent Reserve commands on Kubevirt. In order to issue privileged SCSI ioctls, the VM requires activation of the persistent reservation flag. Once this feature gate is enabled, then the additional container with the qemu-pr-helper is deployed inside the virt-handler pod. Enabling (or removing) the feature gate causes the redeployment of the virt-handler pod.",
-							Default:     false,
+							Description: "This feature gate has graduated to a dedicated configuration field. Deprecated: use v1's spec.storage.persistentReservationConfiguration.enabled instead. This feature gate will be removed in a future release.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
@@ -242,15 +241,14 @@ func schema_kubevirt_hyperconverged_cluster_operator_api_v1beta1_HyperConvergedF
 					},
 					"enableMultiArchBootImageImport": {
 						SchemaProps: spec.SchemaProps{
-							Description: "EnableMultiArchBootImageImport allows the HCO to run on heterogeneous clusters with different CPU architectures. Setting this field to true will allow the HCO to create Golden Images for different CPU architectures.\n\nThis feature is in Developer Preview.",
-							Default:     false,
+							Description: "EnableMultiArchBootImageImport allows the HCO to run on heterogeneous clusters with different CPU architectures. Setting this field to true will allow the HCO to create Golden Images for different CPU architectures. This feature gate has graduated to a dedicated configuration field. Deprecated: use v1's spec.workloadSources.enableMultiArchBootImageImport instead. This feature gate will be removed in a future release.",
 							Type:        []string{"boolean"},
 							Format:      "",
 						},
 					},
 					"decentralizedLiveMigration": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DecentralizedLiveMigration enables the decentralized live migration (cross-cluster migration) feature. This feature allows live migration of VirtualMachineInstances between different clusters. This feature is in Developer Preview.",
+							Description: "DecentralizedLiveMigration enables the decentralized live migration (cross-cluster migration) feature. This feature allows live migration of VirtualMachineInstances between different clusters. This feature is in Tech Preview.",
 							Default:     true,
 							Type:        []string{"boolean"},
 							Format:      "",
@@ -281,7 +279,7 @@ func schema_kubevirt_hyperconverged_cluster_operator_api_v1beta1_HyperConvergedF
 					},
 					"incrementalBackup": {
 						SchemaProps: spec.SchemaProps{
-							Description: "IncrementalBackup enables changed block tracking backups and incremental backups using QEMU capabilities in KubeVirt. When enabled, this also enables the UtilityVolumes feature gate in the KubeVirt CR. Note: This feature is in Tech Preview.",
+							Description: "IncrementalBackup enables changed block tracking backups and incremental backups using QEMU capabilities in KubeVirt. When enabled, this also enables the UtilityVolumes feature gate in the KubeVirt CR. Note: This feature is in Developer Preview.",
 							Default:     false,
 							Type:        []string{"boolean"},
 							Format:      "",

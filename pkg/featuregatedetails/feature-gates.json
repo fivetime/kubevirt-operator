@@ -2,7 +2,7 @@
   {
     "name": "decentralizedLiveMigration",
     "phase": "beta",
-    "description": "DecentralizedLiveMigration enables the decentralized live migration (cross-cluster migration) feature. This feature allows live migration of VirtualMachineInstances between different clusters. This feature is in Developer Preview."
+    "description": "DecentralizedLiveMigration enables the decentralized live migration (cross-cluster migration) feature. This feature allows live migration of VirtualMachineInstances between different clusters. This feature is in Tech Preview."
   },
   {
     "name": "declarativeHotplugVolumes",
@@ -30,19 +30,19 @@
     "description": "Deploy KubeSecondaryDNS by CNAO"
   },
   {
+    "name": "deployObservabilityController",
+    "phase": "alpha",
+    "description": "Deploy the virt-observability-controller component. When enabled, the controller exposes KubeVirt metrics and manages PrometheusRule resources independently from the KubeVirt control plane."
+  },
+  {
     "name": "downwardMetrics",
     "phase": "alpha",
     "description": "Allow to expose a limited set of host metrics to guests."
   },
   {
-    "name": "enableMultiArchBootImageImport",
-    "phase": "alpha",
-    "description": "EnableMultiArchBootImageImport allows the HCO to run on heterogeneous clusters with different CPU architectures. Setting this field to true will allow the HCO to create Golden Images for different CPU architectures. This feature is in Developer Preview."
-  },
-  {
     "name": "incrementalBackup",
     "phase": "alpha",
-    "description": "IncrementalBackup enables changed block tracking backups and incremental backups using QEMU capabilities in KubeVirt. When enabled, this also enables the UtilityVolumes feature gate in the KubeVirt CR. Note: This feature is in Tech Preview."
+    "description": "IncrementalBackup enables changed block tracking backups and incremental backups using QEMU capabilities in KubeVirt. When enabled, this also enables the UtilityVolumes feature gate in the KubeVirt CR. Note: This feature is in Developer Preview."
   },
   {
     "name": "objectGraph",
@@ -50,13 +50,18 @@
     "description": "ObjectGraph enables the ObjectGraph VM and VMI subresource in KubeVirt. This subresource returns a structured list of k8s objects that are related to the specified VM or VMI, enabling better dependency tracking. Note: This feature is in Developer Preview."
   },
   {
-    "name": "persistentReservation",
-    "phase": "alpha",
-    "description": "Enable persistent reservation of a LUN through the SCSI Persistent Reserve commands on Kubevirt. In order to issue privileged SCSI ioctls, the VM requires activation of the persistent reservation flag. Once this feature gate is enabled, then the additional container with the qemu-pr-helper is deployed inside the virt-handler pod. Enabling (or removing) the feature gate causes the redeployment of the virt-handler pod."
-  },
-  {
     "name": "disableMDevConfiguration",
     "phase": "deprecated",
-    "description": "Deprecated: use spec.virtualization.mediatedDevicesConfiguration.enabled instead. This feature gate is deprecated and will be removed in a future release."
+    "description": "Deprecated: This feature gate has graduated to a dedicated configuration field; use spec.virtualization.mediatedDevicesConfiguration.enabled instead. This feature gate is deprecated and will be removed in a future release."
+  },
+  {
+    "name": "enableMultiArchBootImageImport",
+    "phase": "deprecated",
+    "description": "Deprecated: This feature gate has graduated to a dedicated configuration field; use spec.workloadSources.enableMultiArchBootImageImport instead. This feature gate is deprecated and will be removed in a future release."
+  },
+  {
+    "name": "persistentReservation",
+    "phase": "deprecated",
+    "description": "This feature gate has graduated to a dedicated configuration field. Use spec.storage.persistentReservationConfiguration.enabled instead. This feature gate is deprecated and will be removed in a future release."
   }
 ]

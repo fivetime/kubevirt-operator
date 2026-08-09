@@ -28,8 +28,11 @@ This Document documents the types introduced by the hyperconverged-cluster-opera
 * [NodeInfoStatus](#nodeinfostatus)
 * [NodeMediatedDeviceTypesConfig](#nodemediateddevicetypesconfig)
 * [NodePlacements](#nodeplacements)
+* [ObservabilityConfig](#observabilityconfig)
+* [ObservabilityWorkloadsConfig](#observabilityworkloadsconfig)
 * [PciHostDevice](#pcihostdevice)
 * [PermittedHostDevices](#permittedhostdevices)
+* [PersistentReservationConfiguration](#persistentreservationconfiguration)
 * [SecurityConfig](#securityconfig)
 * [StorageConfig](#storageconfig)
 * [StorageImportConfig](#storageimportconfig)
@@ -124,7 +127,7 @@ DataImportCronTemplateStatus is a copy of a dataImportCronTemplate as defined in
 | logVerbosityConfig | LogVerbosityConfig configures the verbosity level of Kubevirt's different components. The higher the value - the higher the log verbosity. | *[LogVerbosityConfiguration](#logverbosityconfiguration) |  | false |
 | applicationAwareConfig | ApplicationAwareConfig set the AAQ configurations | *[ApplicationAwareConfigurations](#applicationawareconfigurations) |  | false |
 | deployVmConsoleProxy | deploy VM console proxy resources in SSP operator | *bool | false | false |
-| deployNetworkResourcesInjector | DeployNetworkResourcesInjector enables deployment of the network-resources-injector component. When enabled, the network-resources-injector mutating webhook will be deployed to automatically inject resource requests for custom resources annotated in NetworkAttachmentDefinition. | *bool |  | false |
+| deployNetworkResourcesInjector | DeployNetworkResourcesInjector enables deployment of the network-resources-injector component. When enabled, the network-resources-injector mutating webhook will be deployed to automatically inject resource requests for custom resources annotated in NetworkAttachmentDefinition. | *bool | true | false |
 
 [Back to TOC](#table-of-contents)
 
@@ -145,7 +148,7 @@ HyperConverged is the Schema for the hyperconvergeds API
 | Field | Description | Scheme | Default | Required |
 | ----- | ----------- | ------ | ------- | -------- |
 | metadata |  | [metav1.ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.36/#objectmeta-v1-meta) |  | false |
-| spec |  | [HyperConvergedSpec](#hyperconvergedspec) | {"security": {"certConfig": {"ca": {"duration": "48h0m0s", "renewBefore": "24h0m0s"}, "server": {"duration": "24h0m0s", "renewBefore": "12h0m0s"}}}, "virtualization": {"liveMigrationConfig": {"completionTimeoutPerGiB": 150, "parallelMigrationsPerCluster": 5, "parallelOutboundMigrationsPerNode": 2, "progressTimeout": 150, "allowAutoConverge": false, "allowPostCopy": false}, "virtualMachineOptions": {"disableFreePageReporting": false, "disableSerialConsoleLog": false}, "vmiCPUAllocationRatio": 10},"workloadSources":{"enableCommonBootImageImport":true}, "deployment": {"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "applicationAwareConfig": {"enable": false}}} | false |
+| spec |  | [HyperConvergedSpec](#hyperconvergedspec) | {"security": {"certConfig": {"ca": {"duration": "48h0m0s", "renewBefore": "24h0m0s"}, "server": {"duration": "24h0m0s", "renewBefore": "12h0m0s"}}}, "virtualization": {"liveMigrationConfig": {"completionTimeoutPerGiB": 20, "parallelMigrationsPerCluster": 5, "parallelOutboundMigrationsPerNode": 1, "progressTimeout": 150, "allowAutoConverge": false, "allowPostCopy": false}, "virtualMachineOptions": {"disableFreePageReporting": false, "disableSerialConsoleLog": false}, "vmiCPUAllocationRatio": 10},"workloadSources":{"enableCommonBootImageImport":true}, "deployment": {"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "deployNetworkResourcesInjector": true, "applicationAwareConfig": {"enable": false}}} | false |
 | status |  | [HyperConvergedStatus](#hyperconvergedstatus) |  | false |
 
 [Back to TOC](#table-of-contents)
@@ -179,12 +182,13 @@ HyperConvergedSpec defines the desired state of HyperConverged
 | Field | Description | Scheme | Default | Required |
 | ----- | ----------- | ------ | ------- | -------- |
 | featureGates | For feature gate details, see [here](#hco-feature-gates) | featuregates.HyperConvergedFeatureGates |  | false |
-| virtualization | Virtualization contains all the configurations for virtualization | [VirtualizationConfig](#virtualizationconfig) | {"liveMigrationConfig": {"completionTimeoutPerGiB": 150, "parallelMigrationsPerCluster": 5, "parallelOutboundMigrationsPerNode": 2, "progressTimeout": 150, "allowAutoConverge": false, "allowPostCopy": false}, "virtualMachineOptions": {"disableFreePageReporting": false, "disableSerialConsoleLog": false}, "vmiCPUAllocationRatio": 10} | false |
+| virtualization | Virtualization contains all the configurations for virtualization | [VirtualizationConfig](#virtualizationconfig) | {"liveMigrationConfig": {"completionTimeoutPerGiB": 20, "parallelMigrationsPerCluster": 5, "parallelOutboundMigrationsPerNode": 1, "progressTimeout": 150, "allowAutoConverge": false, "allowPostCopy": false, "allowWorkloadDisruption": false}, "virtualMachineOptions": {"disableFreePageReporting": false, "disableSerialConsoleLog": false}, "vmiCPUAllocationRatio": 10} | false |
 | storage | Storage contains all the configurations for storage | *[StorageConfig](#storageconfig) |  | false |
 | networking | Networking contains all the configurations for networking | *[NetworkingConfig](#networkingconfig) |  | false |
 | workloadSources | WorkloadSources contains all the configurations for workload sources | [WorkloadSourcesConfig](#workloadsourcesconfig) |  | false |
 | security | Security contains all the security configurations | [SecurityConfig](#securityconfig) | {"certConfig": {"ca": {"duration": "48h0m0s", "renewBefore": "24h0m0s"}, "server": {"duration": "24h0m0s", "renewBefore": "12h0m0s"}}} | false |
-| deployment | Deployment contains all the configurations related to deployment of KubeVirt components | [DeploymentConfig](#deploymentconfig) | {"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "applicationAwareConfig": {"enable": false}} | false |
+| deployment | Deployment contains all the configurations related to deployment of KubeVirt components | [DeploymentConfig](#deploymentconfig) | {"uninstallStrategy": "BlockUninstallIfWorkloadsExist", "deployVmConsoleProxy": false, "deployNetworkResourcesInjector": true, "applicationAwareConfig": {"enable": false}} | false |
+| observability | Observability contains configurations for the observability controller | *[ObservabilityConfig](#observabilityconfig) |  | false |
 
 [Back to TOC](#table-of-contents)
 
@@ -236,13 +240,14 @@ LiveMigrationConfigurations - Live migration limits and timeouts are applied so 
 | Field | Description | Scheme | Default | Required |
 | ----- | ----------- | ------ | ------- | -------- |
 | parallelMigrationsPerCluster | Number of migrations running in parallel in the cluster. | *uint32 | 5 | false |
-| parallelOutboundMigrationsPerNode | Maximum number of outbound migrations per node. | *uint32 | 2 | false |
+| parallelOutboundMigrationsPerNode | The maximum number of outbound migrations allowed simultaneously per node. Setting this to 1 (default) ensures maximum available bandwidth per migration. Higher values accelerate node drains through parallel operations, but increase the risk of busy VMs failing due to network congestion. | *uint32 | 1 | false |
 | bandwidthPerMigration | Bandwidth limit of each migration, the value is quantity of bytes per second (e.g. 2048Mi = 2048MiB/sec) | *string |  | false |
-| completionTimeoutPerGiB | If a migrating VM is big and busy, while the connection to the destination node is slow, migration may never converge. The completion timeout is calculated based on completionTimeoutPerGiB times the size of the guest (both RAM and migrated disks, if any). For example, with completionTimeoutPerGiB set to 800, a virtual machine instance with 6GiB memory will timeout if it has not completed migration in 1h20m. Use a lower completionTimeoutPerGiB to induce quicker failure, so that another destination or post-copy is attempted. Use a higher completionTimeoutPerGiB to let workload with spikes in its memory dirty rate to converge. The format is a number. | *int64 | 150 | false |
+| completionTimeoutPerGiB | If a migrating VM is big and busy, while the connection to the destination node is slow, migration may never converge. The completion timeout is calculated based on completionTimeoutPerGiB times the size of the guest (both RAM and migrated disks, if any). For example, with completionTimeoutPerGiB set to 800, a virtual machine instance with 6GiB memory will timeout if it has not completed migration in 1h20m. Use a lower completionTimeoutPerGiB to induce quicker failure, so that another destination or post-copy is attempted. Use a higher completionTimeoutPerGiB to let workload with spikes in its memory dirty rate to converge. The format is a number. | *int64 | 20 | false |
 | progressTimeout | The migration will be canceled if memory copy fails to make progress in this time, in seconds. | *int64 | 150 | false |
 | network | The migrations will be performed over a dedicated multus network to minimize disruption to tenant workloads due to network saturation when VM live migrations are triggered. | *string |  | false |
 | allowAutoConverge | AllowAutoConverge allows the platform to compromise performance/availability of VMIs to guarantee successful VMI live migrations. Defaults to false | *bool | false | false |
 | allowPostCopy | When enabled, KubeVirt attempts to use post-copy live-migration in case it reaches its completion timeout while attempting pre-copy live-migration. Post-copy migrations allow even the busiest VMs to successfully live-migrate. However, events like a network failure or a failure in any of the source or destination nodes can cause the migrated VM to crash or reach inconsistency. Enable this option when evicting nodes is more important than keeping VMs alive. Defaults to false. | *bool | false | false |
+| allowWorkloadDisruption | AllowWorkloadDisruption indicates that the migration shouldn't be canceled after the acceptable completion time is exceeded. Instead, if permitted, migration will be switched to post-copy or the VMI will be paused to allow the migration to complete. Defaults to false. | *bool | false | false |
 
 [Back to TOC](#table-of-contents)
 
@@ -327,6 +332,28 @@ NodePlacements defines the node scheduling configuration for infrastructure or w
 
 [Back to TOC](#table-of-contents)
 
+## ObservabilityConfig
+
+ObservabilityConfig contains configurations for the observability controller
+
+| Field | Description | Scheme | Default | Required |
+| ----- | ----------- | ------ | ------- | -------- |
+| workloads | Workloads defines filtering configuration for workload-related metrics | *[ObservabilityWorkloadsConfig](#observabilityworkloadsconfig) |  | false |
+| allowedAlerts | AllowedAlerts defines the list of alert rule names to include. When set, only alerts matching this list will be created. | []string |  | false |
+| allowedRecordingRules | AllowedRecordingRules defines the list of recording rule names to include. When set, only recording rules matching this list will be created. | []string |  | false |
+
+[Back to TOC](#table-of-contents)
+
+## ObservabilityWorkloadsConfig
+
+ObservabilityWorkloadsConfig defines filtering for workload metrics
+
+| Field | Description | Scheme | Default | Required |
+| ----- | ----------- | ------ | ------- | -------- |
+| allowedMetrics | AllowedMetrics defines the list of metric names to expose. When set, only metrics matching this list will be collected. | []string |  | false |
+
+[Back to TOC](#table-of-contents)
+
 ## PciHostDevice
 
 PciHostDevice represents a host PCI device allowed for passthrough
@@ -352,6 +379,16 @@ PermittedHostDevices holds information about devices allowed for passthrough
 
 [Back to TOC](#table-of-contents)
 
+## PersistentReservationConfiguration
+
+PersistentReservationConfiguration holds the configuration for SCSI persistent reservation support
+
+| Field | Description | Scheme | Default | Required |
+| ----- | ----------- | ------ | ------- | -------- |
+| enabled | Enabled controls the deployment of additional resources like the pr-helper container for enabling the use of the SCSI persistent reservation in VMs, defaults to false. | *bool |  | false |
+
+[Back to TOC](#table-of-contents)
+
 ## SecurityConfig
 
 SecurityConfig contains all the security configurations
@@ -374,6 +411,7 @@ StorageConfig contains all the storage configurations
 | storageImport | StorageImport contains configuration for importing containerized data | *[StorageImportConfig](#storageimportconfig) |  | false |
 | filesystemOverhead | FilesystemOverhead describes the space reserved for overhead when using Filesystem volumes. A value is between 0 and 1, if not defined it is 0.055 (5.5 percent overhead) | *cdiv1beta1.FilesystemOverhead |  | false |
 | workloadResourceRequirements | WorkloadResourceRequirements defines the resource requirements for storage workloads. It will propagate to the CDI custom resource | *corev1.ResourceRequirements |  | false |
+| persistentReservationConfiguration | PersistentReservationConfiguration controls the deployment of additional resources required for using SCSI persistent reservation in VMs | *[PersistentReservationConfiguration](#persistentreservationconfiguration) |  | false |
 
 [Back to TOC](#table-of-contents)
 
@@ -442,7 +480,7 @@ VirtualizationConfig contains all the virtualization configurations
 | Field | Description | Scheme | Default | Required |
 | ----- | ----------- | ------ | ------- | -------- |
 | tuningPolicy | TuningPolicy allows configuring the mode in which the RateLimits of kubevirt are set. If TuningPolicy is not present the default kubevirt values are used. It can be set to `annotation` for fine-tuning the kubevirt queryPerSeconds (QPS) and burst values. QPS and burst values are taken from the annotation hco.kubevirt.io/tuningPolicy | HyperConvergedTuningPolicy |  | false |
-| liveMigrationConfig | Live migration limits and timeouts are applied so that migration processes do not overwhelm the cluster. | [LiveMigrationConfigurations](#livemigrationconfigurations) | {"completionTimeoutPerGiB": 150, "parallelMigrationsPerCluster": 5, "parallelOutboundMigrationsPerNode": 2, "progressTimeout": 150, "allowAutoConverge": false, "allowPostCopy": false} | false |
+| liveMigrationConfig | Live migration limits and timeouts are applied so that migration processes do not overwhelm the cluster. | [LiveMigrationConfigurations](#livemigrationconfigurations) | {"completionTimeoutPerGiB": 20, "parallelMigrationsPerCluster": 5, "parallelOutboundMigrationsPerNode": 1, "progressTimeout": 150, "allowAutoConverge": false, "allowPostCopy": false, "allowWorkloadDisruption": false} | false |
 | permittedHostDevices | PermittedHostDevices holds information about devices allowed for passthrough | *[PermittedHostDevices](#permittedhostdevices) |  | false |
 | mediatedDevicesConfiguration | MediatedDevicesConfiguration holds information about MDEV types to be defined on nodes, if available | *[MediatedDevicesConfiguration](#mediateddevicesconfiguration) |  | false |
 | workloadUpdateStrategy | WorkloadUpdateStrategy defines at the cluster level how to handle automated workload updates | [HyperConvergedWorkloadUpdateStrategy](#hyperconvergedworkloadupdatestrategy) | {"workloadUpdateMethods": {"LiveMigrate"}, "batchEvictionSize": 10, "batchEvictionInterval": "1m0s"} | false |
@@ -469,6 +507,7 @@ WorkloadSourcesConfig contains all the configurations related to workloads resou
 | commonTemplatesNamespace | CommonTemplatesNamespace defines namespace in which common templates will be deployed. It overrides the default openshift namespace. | *string |  | false |
 | commonBootImageNamespace | CommonBootImageNamespace override the default namespace of the common boot images, in order to hide them.\n\nIf not set, HCO won't set any namespace, letting SSP to use the default. If set, use the namespace to create the DataImportCronTemplates and the common image streams, with this namespace. This field is not set by default. | *string |  | false |
 | enableCommonBootImageImport | Opt-in to automatic delivery/updates of the common data import cron templates. There are two sources for the data import cron templates: hard coded list of common templates, and custom (user defined) templates that can be added to the dataImportCronTemplates field. This field only controls the common templates. It is possible to use custom templates by adding them to the dataImportCronTemplates field. | *bool | true | false |
+| enableMultiArchBootImageImport | EnableMultiArchBootImageImport allows the HCO to run on heterogeneous clusters with different CPU architectures. Setting this field to true will allow the HCO to create Golden Images for different CPU architectures. | *bool |  | false |
 | dataImportCronTemplates | DataImportCronTemplates holds list of data import cron templates (golden images) | [][DataImportCronTemplate](#dataimportcrontemplate) |  | false |
 | instancetypeConfig | InstancetypeConfig holds the configuration of instance type related functionality within KubeVirt. | *v1.InstancetypeConfiguration |  | false |
 | commonInstancetypesDeployment | CommonInstancetypesDeployment holds the configuration of common-instancetypes deployment within KubeVirt. | *v1.CommonInstancetypesDeployment |  | false |
@@ -491,18 +530,19 @@ A feature gate may be in the following phases:
 
 | Name | Description | Phase |
 | ---- | ----------- | ----- |
-| decentralizedLiveMigration | DecentralizedLiveMigration enables the decentralized live migration (cross-cluster migration) feature. This feature allows live migration of VirtualMachineInstances between different clusters. This feature is in Developer Preview. | beta |
+| decentralizedLiveMigration | DecentralizedLiveMigration enables the decentralized live migration (cross-cluster migration) feature. This feature allows live migration of VirtualMachineInstances between different clusters. This feature is in Tech Preview. | beta |
 | declarativeHotplugVolumes | DeclarativeHotplugVolumes enables the use of the declarative volume hotplug feature in KubeVirt. When set to true or nil, the "DeclarativeHotplugVolumes" feature gate is enabled and the "HotplugVolumes" feature gate is not (default behavior). When set to false, the "HotplugVolumes" featuregate is enabled in KubeVirt. This feature is in Technical Preview. | beta |
 | template | VirtualMachine Templates provide a native, in-cluster VM templating for KubeVirt. They allow you to define reusable VM blueprints with parameterized values that can be processed to create virtual machine. the "template" feature gate enables this feature. Note: this feature is in Tech Preview. | beta |
 | alignCPUs | Enable KubeVirt to request up to two additional dedicated CPUs in order to complete the total CPU count to an even parity when using emulator thread isolation. Note: this feature is in Developer Preview. | alpha |
 | containerPathVolumes | ContainerPathVolumes enables the use of container paths as volumes in KubeVirt. This allows VMs to access files and directories from the virt-launcher pod's filesystem via virtiofs. | alpha |
 | deployKubeSecondaryDNS | Deploy KubeSecondaryDNS by CNAO | alpha |
+| deployObservabilityController | Deploy the virt-observability-controller component. When enabled, the controller exposes KubeVirt metrics and manages PrometheusRule resources independently from the KubeVirt control plane. | alpha |
 | downwardMetrics | Allow to expose a limited set of host metrics to guests. | alpha |
-| enableMultiArchBootImageImport | EnableMultiArchBootImageImport allows the HCO to run on heterogeneous clusters with different CPU architectures. Setting this field to true will allow the HCO to create Golden Images for different CPU architectures. This feature is in Developer Preview. | alpha |
-| incrementalBackup | IncrementalBackup enables changed block tracking backups and incremental backups using QEMU capabilities in KubeVirt. When enabled, this also enables the UtilityVolumes feature gate in the KubeVirt CR. Note: This feature is in Tech Preview. | alpha |
+| incrementalBackup | IncrementalBackup enables changed block tracking backups and incremental backups using QEMU capabilities in KubeVirt. When enabled, this also enables the UtilityVolumes feature gate in the KubeVirt CR. Note: This feature is in Developer Preview. | alpha |
 | objectGraph | ObjectGraph enables the ObjectGraph VM and VMI subresource in KubeVirt. This subresource returns a structured list of k8s objects that are related to the specified VM or VMI, enabling better dependency tracking. Note: This feature is in Developer Preview. | alpha |
-| persistentReservation | Enable persistent reservation of a LUN through the SCSI Persistent Reserve commands on Kubevirt. In order to issue privileged SCSI ioctls, the VM requires activation of the persistent reservation flag. Once this feature gate is enabled, then the additional container with the qemu-pr-helper is deployed inside the virt-handler pod. Enabling (or removing) the feature gate causes the redeployment of the virt-handler pod. | alpha |
-| disableMDevConfiguration | Deprecated: use spec.virtualization.mediatedDevicesConfiguration.enabled instead. This feature gate is deprecated and will be removed in a future release. | deprecated |
+| disableMDevConfiguration | Deprecated: This feature gate has graduated to a dedicated configuration field; use spec.virtualization.mediatedDevicesConfiguration.enabled instead. This feature gate is deprecated and will be removed in a future release. | deprecated |
+| enableMultiArchBootImageImport | Deprecated: This feature gate has graduated to a dedicated configuration field; use spec.workloadSources.enableMultiArchBootImageImport instead. This feature gate is deprecated and will be removed in a future release. | deprecated |
+| persistentReservation | This feature gate has graduated to a dedicated configuration field. Use spec.storage.persistentReservationConfiguration.enabled instead. This feature gate is deprecated and will be removed in a future release. | deprecated |
 
 [Back to TOC](#table-of-contents)
 

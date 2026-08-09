@@ -1497,6 +1497,771 @@ var _ = Describe("api/v1beta1", func() {
 		})
 	})
 
+	Context("PersistentReservation enabled conversion", func() {
+		Context("v1beta1 to v1", func() {
+			It("should convert persistentReservation=true to enabled=true when enabled is unset", func() {
+				v1beta1Spec := HyperConvergedSpec{
+					FeatureGates: HyperConvergedFeatureGates{
+						PersistentReservation: new(true),
+					},
+				}
+				v1Spec := hcov1.HyperConvergedSpec{}
+
+				convertPersistentReservationV1beta1ToV1(v1beta1Spec, &v1Spec)
+
+				Expect(v1Spec.Storage).ToNot(BeNil())
+				Expect(v1Spec.Storage.PersistentReservationConfiguration).ToNot(BeNil())
+				Expect(v1Spec.Storage.PersistentReservationConfiguration.Enabled).To(HaveValue(BeTrue()))
+			})
+
+			It("should convert persistentReservation=false to enabled=false when enabled is unset", func() {
+				v1beta1Spec := HyperConvergedSpec{
+					FeatureGates: HyperConvergedFeatureGates{
+						PersistentReservation: new(false),
+					},
+				}
+				v1Spec := hcov1.HyperConvergedSpec{}
+
+				convertPersistentReservationV1beta1ToV1(v1beta1Spec, &v1Spec)
+
+				Expect(v1Spec.Storage).ToNot(BeNil())
+				Expect(v1Spec.Storage.PersistentReservationConfiguration).ToNot(BeNil())
+				Expect(v1Spec.Storage.PersistentReservationConfiguration.Enabled).To(HaveValue(BeFalse()))
+			})
+
+			It("should override enabled when the FG is set", func() {
+				v1beta1Spec := HyperConvergedSpec{
+					FeatureGates: HyperConvergedFeatureGates{
+						PersistentReservation: new(true),
+					},
+				}
+				v1Spec := hcov1.HyperConvergedSpec{
+					Storage: &hcov1.StorageConfig{
+						PersistentReservationConfiguration: &hcov1.PersistentReservationConfiguration{
+							Enabled: new(false),
+						},
+					},
+				}
+
+				convertPersistentReservationV1beta1ToV1(v1beta1Spec, &v1Spec)
+
+				Expect(v1Spec.Storage.PersistentReservationConfiguration.Enabled).To(HaveValue(BeTrue()))
+			})
+
+			It("should not override enabled when FG is not set", func() {
+				v1beta1Spec := HyperConvergedSpec{
+					FeatureGates: HyperConvergedFeatureGates{},
+				}
+				v1Spec := hcov1.HyperConvergedSpec{
+					Storage: &hcov1.StorageConfig{
+						PersistentReservationConfiguration: &hcov1.PersistentReservationConfiguration{
+							Enabled: new(true),
+						},
+					},
+				}
+
+				convertPersistentReservationV1beta1ToV1(v1beta1Spec, &v1Spec)
+
+				Expect(v1Spec.Storage.PersistentReservationConfiguration.Enabled).To(HaveValue(BeTrue()))
+			})
+
+			It("should do nothing when persistentReservation FG is unset", func() {
+				v1beta1Spec := HyperConvergedSpec{}
+				v1Spec := hcov1.HyperConvergedSpec{}
+
+				convertPersistentReservationV1beta1ToV1(v1beta1Spec, &v1Spec)
+
+				Expect(v1Spec.Storage).To(BeNil())
+			})
+		})
+
+		Context("v1 to v1beta1", func() {
+			It("should convert enabled=true to v1beta1 persistentReservation FG = true", func() {
+				v1Storage := &hcov1.StorageConfig{
+					PersistentReservationConfiguration: &hcov1.PersistentReservationConfiguration{
+						Enabled: new(true),
+					},
+				}
+				v1beta1Spec := HyperConvergedSpec{}
+
+				convertPersistentReservationV1ToV1beta1(v1Storage, &v1beta1Spec)
+
+				Expect(v1beta1Spec.FeatureGates.PersistentReservation).To(HaveValue(BeTrue()))
+			})
+
+			It("should convert enabled=false to v1beta1 persistentReservation FG = false", func() {
+				v1Storage := &hcov1.StorageConfig{
+					PersistentReservationConfiguration: &hcov1.PersistentReservationConfiguration{
+						Enabled: new(false),
+					},
+				}
+				v1beta1Spec := HyperConvergedSpec{}
+
+				convertPersistentReservationV1ToV1beta1(v1Storage, &v1beta1Spec)
+
+				Expect(v1beta1Spec.FeatureGates.PersistentReservation).To(HaveValue(BeFalse()))
+			})
+
+			It("should not set FG when enabled is unset", func() {
+				v1Storage := &hcov1.StorageConfig{
+					PersistentReservationConfiguration: &hcov1.PersistentReservationConfiguration{},
+				}
+				v1beta1Spec := HyperConvergedSpec{}
+
+				convertPersistentReservationV1ToV1beta1(v1Storage, &v1beta1Spec)
+
+				Expect(v1beta1Spec.FeatureGates.PersistentReservation).To(BeNil())
+			})
+
+			It("should do nothing when storage is nil", func() {
+				v1beta1Spec := HyperConvergedSpec{}
+
+				convertPersistentReservationV1ToV1beta1(nil, &v1beta1Spec)
+
+				Expect(v1beta1Spec.FeatureGates.PersistentReservation).To(BeNil())
+			})
+
+			It("should do nothing when persistentReservationConfiguration is nil", func() {
+				v1Storage := &hcov1.StorageConfig{}
+				v1beta1Spec := HyperConvergedSpec{}
+
+				convertPersistentReservationV1ToV1beta1(v1Storage, &v1beta1Spec)
+
+				Expect(v1beta1Spec.FeatureGates.PersistentReservation).To(BeNil())
+			})
+		})
+
+		Context("ConvertTo()", func() {
+			DescribeTable("should convert v1beta1 persistentReservation to v1 enabled, if not set", func(v1beta1FG bool, matcher gomegatypes.GomegaMatcher) {
+				src := &HyperConverged{
+					Spec: HyperConvergedSpec{
+						FeatureGates: HyperConvergedFeatureGates{
+							PersistentReservation: new(v1beta1FG),
+						},
+					},
+				}
+				dst := &hcov1.HyperConverged{}
+
+				Expect(src.ConvertTo(dst)).To(Succeed())
+
+				Expect(dst.Spec.Storage).ToNot(BeNil())
+				Expect(dst.Spec.Storage.PersistentReservationConfiguration).ToNot(BeNil())
+				Expect(dst.Spec.Storage.PersistentReservationConfiguration.Enabled).To(HaveValue(matcher))
+			},
+				Entry("when the v1beta1 FG is true", true, BeTrue()),
+				Entry("when the v1beta1 FG is false", false, BeFalse()),
+			)
+
+			DescribeTableSubtree("should convert v1beta1 persistentReservation to v1 enabled, if set", func(v1Field, v1beta1FG bool) {
+				annotation := fmt.Sprintf(`{"persistentReservationEnabled": %t}`, v1Field)
+
+				It("just make sure the annotation works", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					Expect(dst.Spec.Storage).ToNot(BeNil())
+					Expect(dst.Spec.Storage.PersistentReservationConfiguration).ToNot(BeNil())
+					Expect(dst.Spec.Storage.PersistentReservationConfiguration.Enabled).To(HaveValue(Equal(v1Field)))
+				})
+
+				It("should modify the v1 field", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+						Spec: HyperConvergedSpec{
+							FeatureGates: HyperConvergedFeatureGates{
+								PersistentReservation: new(v1beta1FG),
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					Expect(dst.Spec.Storage).ToNot(BeNil())
+					Expect(dst.Spec.Storage.PersistentReservationConfiguration).ToNot(BeNil())
+					Expect(dst.Spec.Storage.PersistentReservationConfiguration.Enabled).To(HaveValue(Equal(v1beta1FG)))
+				})
+			},
+				Entry("when the v1 field is true and the v1beta1 FG is true", true, true),
+				Entry("when the v1 field is false and the v1beta1 FG is true", false, true),
+				Entry("when the v1 field is true and the v1beta1 FG is false", true, false),
+				Entry("when the v1 field is false and the v1beta1 FG is false", false, false),
+			)
+
+			DescribeTableSubtree("should convert v1beta1 persistentReservation to v1 FG, if FG set", func(v1FG hcofg.State, v1beta1FG bool) {
+				annotation := fmt.Sprintf(`{"featureGates": [{"name": %q, "state": %q}]}`, PersistentReservationFGName, v1FG)
+
+				It("just make sure the annotation works", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					enabled, found := dst.Spec.FeatureGates.IsExplicitlyEnabled(PersistentReservationFGName)
+					Expect(found).To(BeTrue())
+					Expect(enabled).To(Equal(v1FG == hcofg.Enabled))
+				})
+
+				It("should modify the v1 FG", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+						Spec: HyperConvergedSpec{
+							FeatureGates: HyperConvergedFeatureGates{
+								PersistentReservation: new(v1beta1FG),
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					Expect(dst.Spec.Storage).ToNot(BeNil())
+					Expect(dst.Spec.Storage.PersistentReservationConfiguration).ToNot(BeNil())
+					Expect(dst.Spec.Storage.PersistentReservationConfiguration.Enabled).To(HaveValue(Equal(v1beta1FG)))
+
+					enabled, found := dst.Spec.FeatureGates.IsExplicitlyEnabled(PersistentReservationFGName)
+					Expect(found).To(BeTrue())
+					Expect(enabled).To(Equal(v1beta1FG))
+				})
+			},
+				Entry("when the v1 FG is true and the v1beta1 FG is true", hcofg.Enabled, true),
+				Entry("when the v1 FG is false and the v1beta1 FG is true", hcofg.Disabled, true),
+				Entry("when the v1 FG is true and the v1beta1 FG is false", hcofg.Enabled, false),
+				Entry("when the v1 FG is false and the v1beta1 FG is false", hcofg.Disabled, false),
+			)
+
+			DescribeTableSubtree("should convert v1beta1 FG to v1 FG, if set, and override the v1 enabled field", func(v1Enabled bool, v1FG hcofg.State, v1beta1FG bool) {
+				annotation := fmt.Sprintf(`{"persistentReservationEnabled": %t, "featureGates": [{"name": "persistentReservation", "state": %q}]}`, v1Enabled, v1FG)
+
+				It("just make sure the annotation works", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					Expect(dst.Spec.Storage).ToNot(BeNil())
+					Expect(dst.Spec.Storage.PersistentReservationConfiguration).ToNot(BeNil())
+					Expect(dst.Spec.Storage.PersistentReservationConfiguration.Enabled).To(HaveValue(Equal(v1Enabled)))
+
+					enabled, found := dst.Spec.FeatureGates.IsExplicitlyEnabled(PersistentReservationFGName)
+					Expect(found).To(BeTrue())
+					Expect(enabled).To(Equal(v1FG == hcofg.Enabled))
+				})
+
+				It("should modify the v1 FG and the v1 Enabled field", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+						Spec: HyperConvergedSpec{
+							FeatureGates: HyperConvergedFeatureGates{
+								PersistentReservation: new(v1beta1FG),
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					Expect(dst.Spec.Storage).ToNot(BeNil())
+					Expect(dst.Spec.Storage.PersistentReservationConfiguration).ToNot(BeNil())
+					Expect(dst.Spec.Storage.PersistentReservationConfiguration.Enabled).To(HaveValue(Equal(v1beta1FG)))
+
+					enabled, found := dst.Spec.FeatureGates.IsExplicitlyEnabled(PersistentReservationFGName)
+					Expect(found).To(BeTrue())
+					Expect(enabled).To(Equal(v1beta1FG))
+				})
+			},
+				Entry("when the v1 field is true, v1 enabled is true, and the v1beta1 FG is true", true, hcofg.Enabled, true),
+				Entry("when the v1 field is false, v1 enabled is true, and the v1beta1 FG is true", false, hcofg.Enabled, true),
+				Entry("when the v1 field is true, v1 enabled is false, and the v1beta1 FG is true", true, hcofg.Disabled, true),
+				Entry("when the v1 field is false, v1 enabled is false, and the v1beta1 FG is true", false, hcofg.Disabled, true),
+				Entry("when the v1 field is true, v1 enabled is true, and the v1beta1 FG is false", true, hcofg.Enabled, false),
+				Entry("when the v1 field is false, v1 enabled is true, and the v1beta1 FG is false", false, hcofg.Enabled, false),
+				Entry("when the v1 field is true, v1 enabled is false, and the v1beta1 FG is false", true, hcofg.Disabled, false),
+				Entry("when the v1 field is false, v1 enabled is false, and the v1beta1 FG is false", false, hcofg.Disabled, false),
+			)
+
+			DescribeTableSubtree("should convert v1beta1 FG to v1 enabled, if FG set", func(v1FG hcofg.State, v1beta1FG bool) {
+				annotation := fmt.Sprintf(`{"featureGates": [{"name": %q, "state": %q}]}`, PersistentReservationFGName, v1FG)
+
+				It("just make sure the annotation works", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					enabled, found := dst.Spec.FeatureGates.IsExplicitlyEnabled(PersistentReservationFGName)
+					Expect(found).To(BeTrue())
+					Expect(enabled).To(Equal(v1FG == hcofg.Enabled))
+				})
+
+				It("should modify the v1 FG", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+						Spec: HyperConvergedSpec{
+							FeatureGates: HyperConvergedFeatureGates{
+								PersistentReservation: new(v1beta1FG),
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					Expect(dst.Spec.Storage).ToNot(BeNil())
+					Expect(dst.Spec.Storage.PersistentReservationConfiguration).ToNot(BeNil())
+					Expect(dst.Spec.Storage.PersistentReservationConfiguration.Enabled).To(HaveValue(Equal(v1beta1FG)))
+
+					enabled, found := dst.Spec.FeatureGates.IsExplicitlyEnabled(PersistentReservationFGName)
+					Expect(found).To(BeTrue())
+					Expect(enabled).To(Equal(v1beta1FG))
+				})
+			},
+				Entry("when the v1 FG is true and the v1beta1 FG is true", hcofg.Enabled, true),
+				Entry("when the v1 FG is false and the v1beta1 FG is true", hcofg.Disabled, true),
+				Entry("when the v1 FG is true and the v1beta1 FG is false", hcofg.Enabled, false),
+				Entry("when the v1 FG is false and the v1beta1 FG is false", hcofg.Disabled, false),
+			)
+		})
+
+		Context("ConvertFrom()", func() {
+			It("should convert v1 enabled to v1beta1 persistentReservation FG", func() {
+				src := &hcov1.HyperConverged{
+					Spec: hcov1.HyperConvergedSpec{
+						Storage: &hcov1.StorageConfig{
+							PersistentReservationConfiguration: &hcov1.PersistentReservationConfiguration{
+								Enabled: new(true),
+							},
+						},
+					},
+				}
+				dst := &HyperConverged{}
+
+				Expect(dst.ConvertFrom(src)).To(Succeed())
+
+				Expect(dst.Spec.FeatureGates.PersistentReservation).To(HaveValue(BeTrue()))
+			})
+		})
+
+		It("should preserve enabled through round-trip", func() {
+			original := &HyperConverged{
+				Spec: HyperConvergedSpec{
+					FeatureGates: HyperConvergedFeatureGates{
+						PersistentReservation: new(true),
+					},
+				},
+			}
+
+			v1hco := &hcov1.HyperConverged{}
+			Expect(original.ConvertTo(v1hco)).To(Succeed())
+
+			result := &HyperConverged{}
+			Expect(result.ConvertFrom(v1hco)).To(Succeed())
+
+			Expect(result.Spec.FeatureGates.PersistentReservation).To(HaveValue(BeTrue()))
+		})
+	})
+
+	Context("EnableMultiArchBootImageImport conversion", func() {
+		Context("v1beta1 to v1", func() {
+			It("should convert FG=true to enabled=true when enabled is unset", func() {
+				v1beta1Spec := HyperConvergedSpec{
+					FeatureGates: HyperConvergedFeatureGates{
+						EnableMultiArchBootImageImport: new(true),
+					},
+				}
+				v1Spec := hcov1.HyperConvergedSpec{}
+
+				convertMultiArchV1beta1FGToV1(v1beta1Spec, &v1Spec)
+
+				Expect(v1Spec.WorkloadSources.EnableMultiArchBootImageImport).To(HaveValue(BeTrue()))
+			})
+
+			It("should convert FG=false to enabled=false when enabled is unset", func() {
+				v1beta1Spec := HyperConvergedSpec{
+					FeatureGates: HyperConvergedFeatureGates{
+						EnableMultiArchBootImageImport: new(false),
+					},
+				}
+				v1Spec := hcov1.HyperConvergedSpec{}
+
+				convertMultiArchV1beta1FGToV1(v1beta1Spec, &v1Spec)
+
+				Expect(v1Spec.WorkloadSources.EnableMultiArchBootImageImport).To(HaveValue(BeFalse()))
+			})
+
+			It("should override enabled when the FG is set", func() {
+				v1beta1Spec := HyperConvergedSpec{
+					FeatureGates: HyperConvergedFeatureGates{
+						EnableMultiArchBootImageImport: new(true),
+					},
+				}
+				v1Spec := hcov1.HyperConvergedSpec{
+					WorkloadSources: hcov1.WorkloadSourcesConfig{
+						EnableMultiArchBootImageImport: new(false),
+					},
+				}
+
+				convertMultiArchV1beta1FGToV1(v1beta1Spec, &v1Spec)
+
+				Expect(v1Spec.WorkloadSources.EnableMultiArchBootImageImport).To(HaveValue(BeTrue()))
+			})
+
+			It("should not override enabled when FG is not set", func() {
+				v1beta1Spec := HyperConvergedSpec{
+					FeatureGates: HyperConvergedFeatureGates{},
+				}
+				v1Spec := hcov1.HyperConvergedSpec{
+					WorkloadSources: hcov1.WorkloadSourcesConfig{
+						EnableMultiArchBootImageImport: new(false),
+					},
+				}
+
+				convertMultiArchV1beta1FGToV1(v1beta1Spec, &v1Spec)
+
+				Expect(v1Spec.WorkloadSources.EnableMultiArchBootImageImport).To(HaveValue(BeFalse()))
+			})
+
+			It("should do nothing when the FG is unset", func() {
+				v1beta1Spec := HyperConvergedSpec{}
+				v1Spec := hcov1.HyperConvergedSpec{}
+
+				convertMultiArchV1beta1FGToV1(v1beta1Spec, &v1Spec)
+
+				Expect(v1Spec.WorkloadSources.EnableMultiArchBootImageImport).To(BeNil())
+			})
+		})
+
+		Context("v1 to v1beta1", func() {
+			It("should convert enabled=true to v1beta1 EnableMultiArchBootImageImport FG = true", func() {
+				v1WorkloadSources := hcov1.WorkloadSourcesConfig{
+					EnableMultiArchBootImageImport: new(true),
+				}
+				v1beta1Spec := HyperConvergedSpec{}
+
+				convertMultiArchV1ToV1beta1FG(v1WorkloadSources, &v1beta1Spec)
+
+				Expect(v1beta1Spec.FeatureGates.EnableMultiArchBootImageImport).To(HaveValue(BeTrue()))
+			})
+
+			It("should convert enabled=false to v1beta1 EnableMultiArchBootImageImport FG = false", func() {
+				v1WorkloadSources := hcov1.WorkloadSourcesConfig{
+					EnableMultiArchBootImageImport: new(false),
+				}
+				v1beta1Spec := HyperConvergedSpec{}
+
+				convertMultiArchV1ToV1beta1FG(v1WorkloadSources, &v1beta1Spec)
+
+				Expect(v1beta1Spec.FeatureGates.EnableMultiArchBootImageImport).To(HaveValue(BeFalse()))
+			})
+
+			It("should not set FG when enabled is unset", func() {
+				v1WorkloadSources := hcov1.WorkloadSourcesConfig{}
+				v1beta1Spec := HyperConvergedSpec{}
+
+				convertMultiArchV1ToV1beta1FG(v1WorkloadSources, &v1beta1Spec)
+
+				Expect(v1beta1Spec.FeatureGates.EnableMultiArchBootImageImport).To(BeNil())
+			})
+		})
+
+		Context("ConvertTo()", func() {
+			DescribeTable("should convert v1beta1 FG to v1 enabled, if not set", func(v1beta1FG bool, matcher gomegatypes.GomegaMatcher) {
+				src := &HyperConverged{
+					Spec: HyperConvergedSpec{
+						FeatureGates: HyperConvergedFeatureGates{
+							EnableMultiArchBootImageImport: new(v1beta1FG),
+						},
+					},
+				}
+				dst := &hcov1.HyperConverged{}
+
+				Expect(src.ConvertTo(dst)).To(Succeed())
+
+				Expect(dst.Spec.WorkloadSources.EnableMultiArchBootImageImport).To(HaveValue(matcher))
+			},
+				Entry("when the v1beta1 FG is true", true, BeTrue()),
+				Entry("when the v1beta1 FG is false", false, BeFalse()),
+			)
+
+			DescribeTableSubtree("when the v1beta1 EnableMultiArchBootImageImport FG is set", func(v1Field, v1beta1FG bool) {
+				annotation := fmt.Sprintf(`{"multiArchEnabled": %t}`, v1Field)
+
+				It("just make sure the annotation works", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					Expect(dst.Spec.WorkloadSources.EnableMultiArchBootImageImport).To(HaveValue(Equal(v1Field)))
+				})
+
+				It("should modify the v1 field", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+						Spec: HyperConvergedSpec{
+							FeatureGates: HyperConvergedFeatureGates{
+								EnableMultiArchBootImageImport: new(v1beta1FG),
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					Expect(dst.Spec.WorkloadSources.EnableMultiArchBootImageImport).To(HaveValue(Equal(v1beta1FG)))
+				})
+			},
+				Entry("when the v1 field is true and the v1beta1 FG is true", true, true),
+				Entry("when the v1 field is false and the v1beta1 FG is true", false, true),
+				Entry("when the v1 field is true and the v1beta1 FG is false", true, false),
+				Entry("when the v1 field is false and the v1beta1 FG is false", false, false),
+			)
+
+			DescribeTableSubtree("should convert v1beta1 EnableMultiArchBootImageImport to v1 FG, if FG set", func(v1FG hcofg.State, v1beta1FG bool) {
+				annotation := fmt.Sprintf(`{"featureGates": [{"name": %q, "state": %q}]}`, MultiArchFGName, v1FG)
+
+				It("just make sure the annotation works", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					enabled, found := dst.Spec.FeatureGates.IsExplicitlyEnabled(MultiArchFGName)
+					Expect(found).To(BeTrue())
+					Expect(enabled).To(Equal(v1FG == hcofg.Enabled))
+				})
+
+				It("should modify the v1 FG", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+						Spec: HyperConvergedSpec{
+							FeatureGates: HyperConvergedFeatureGates{
+								EnableMultiArchBootImageImport: new(v1beta1FG),
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					Expect(dst.Spec.WorkloadSources.EnableMultiArchBootImageImport).To(HaveValue(Equal(v1beta1FG)))
+
+					enabled, found := dst.Spec.FeatureGates.IsExplicitlyEnabled(MultiArchFGName)
+					Expect(found).To(BeTrue())
+					Expect(enabled).To(Equal(v1beta1FG))
+				})
+			},
+				Entry("when the v1 FG is true and the v1beta1 FG is true", hcofg.Enabled, true),
+				Entry("when the v1 FG is false and the v1beta1 FG is true", hcofg.Disabled, true),
+				Entry("when the v1 FG is true and the v1beta1 FG is false", hcofg.Enabled, false),
+				Entry("when the v1 FG is false and the v1beta1 FG is false", hcofg.Disabled, false),
+			)
+
+			DescribeTableSubtree("should convert v1beta1 FG to v1 FG, if set, and override the v1 enabled field", func(v1Enabled bool, v1FG hcofg.State, v1beta1FG bool) {
+				annotation := fmt.Sprintf(`{"multiArchEnabled": %t, "featureGates": [{"name": "enableMultiArchBootImageImport", "state": %q}]}`, v1Enabled, v1FG)
+
+				It("just make sure the annotation works", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					Expect(dst.Spec.WorkloadSources.EnableMultiArchBootImageImport).To(HaveValue(Equal(v1Enabled)))
+
+					enabled, found := dst.Spec.FeatureGates.IsExplicitlyEnabled(MultiArchFGName)
+					Expect(found).To(BeTrue())
+					Expect(enabled).To(Equal(v1FG == hcofg.Enabled))
+				})
+
+				It("should modify the v1 FG and the v1 Enabled field", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+						Spec: HyperConvergedSpec{
+							FeatureGates: HyperConvergedFeatureGates{
+								EnableMultiArchBootImageImport: new(v1beta1FG),
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					Expect(dst.Spec.WorkloadSources.EnableMultiArchBootImageImport).To(HaveValue(Equal(v1beta1FG)))
+
+					enabled, found := dst.Spec.FeatureGates.IsExplicitlyEnabled(MultiArchFGName)
+					Expect(found).To(BeTrue())
+					Expect(enabled).To(Equal(v1beta1FG))
+				})
+			},
+				Entry("when the v1 field is true, v1 enabled is true, and the v1beta1 FG is true", true, hcofg.Enabled, true),
+				Entry("when the v1 field is false, v1 enabled is true, and the v1beta1 FG is true", false, hcofg.Enabled, true),
+				Entry("when the v1 field is true, v1 enabled is false, and the v1beta1 FG is true", true, hcofg.Disabled, true),
+				Entry("when the v1 field is false, v1 enabled is false, and the v1beta1 FG is true", false, hcofg.Disabled, true),
+				Entry("when the v1 field is true, v1 enabled is true, and the v1beta1 FG is false", true, hcofg.Enabled, false),
+				Entry("when the v1 field is false, v1 enabled is true, and the v1beta1 FG is false", false, hcofg.Enabled, false),
+				Entry("when the v1 field is true, v1 enabled is false, and the v1beta1 FG is false", true, hcofg.Disabled, false),
+				Entry("when the v1 field is false, v1 enabled is false, and the v1beta1 FG is false", false, hcofg.Disabled, false),
+			)
+
+			DescribeTableSubtree("should convert v1beta1 FG to v1 enabled, if FG set", func(v1FG hcofg.State, v1beta1FG bool) {
+				annotation := fmt.Sprintf(`{"featureGates": [{"name": %q, "state": %q}]}`, MultiArchFGName, v1FG)
+
+				It("just make sure the annotation works", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					enabled, found := dst.Spec.FeatureGates.IsExplicitlyEnabled(MultiArchFGName)
+					Expect(found).To(BeTrue())
+					Expect(enabled).To(Equal(v1FG == hcofg.Enabled))
+				})
+
+				It("should modify the v1 FG", func() {
+					src := &HyperConverged{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								v1OnlyFieldAnnotation: annotation,
+							},
+						},
+						Spec: HyperConvergedSpec{
+							FeatureGates: HyperConvergedFeatureGates{
+								EnableMultiArchBootImageImport: new(v1beta1FG),
+							},
+						},
+					}
+					dst := &hcov1.HyperConverged{}
+
+					Expect(src.ConvertTo(dst)).To(Succeed())
+
+					Expect(dst.Spec.WorkloadSources.EnableMultiArchBootImageImport).To(HaveValue(Equal(v1beta1FG)))
+
+					enabled, found := dst.Spec.FeatureGates.IsExplicitlyEnabled(MultiArchFGName)
+					Expect(found).To(BeTrue())
+					Expect(enabled).To(Equal(v1beta1FG))
+				})
+			},
+				Entry("when the v1 FG is true and the v1beta1 FG is true", hcofg.Enabled, true),
+				Entry("when the v1 FG is false and the v1beta1 FG is true", hcofg.Disabled, true),
+				Entry("when the v1 FG is true and the v1beta1 FG is false", hcofg.Enabled, false),
+				Entry("when the v1 FG is false and the v1beta1 FG is false", hcofg.Disabled, false),
+			)
+		})
+
+		Context("ConvertFrom()", func() {
+			It("should convert v1 enabled to v1beta1 enableMultiArchBootImageImport FG", func() {
+				src := &hcov1.HyperConverged{
+					Spec: hcov1.HyperConvergedSpec{
+						WorkloadSources: hcov1.WorkloadSourcesConfig{
+							EnableMultiArchBootImageImport: new(true),
+						},
+					},
+				}
+				dst := &HyperConverged{}
+
+				Expect(dst.ConvertFrom(src)).To(Succeed())
+
+				Expect(dst.Spec.FeatureGates.EnableMultiArchBootImageImport).To(HaveValue(BeTrue()))
+			})
+		})
+
+		It("should preserve enabled through round-trip", func() {
+			original := &HyperConverged{
+				Spec: HyperConvergedSpec{
+					FeatureGates: HyperConvergedFeatureGates{
+						EnableMultiArchBootImageImport: new(true),
+					},
+				},
+			}
+
+			v1hco := &hcov1.HyperConverged{}
+			Expect(original.ConvertTo(v1hco)).To(Succeed())
+
+			result := &HyperConverged{}
+			Expect(result.ConvertFrom(v1hco)).To(Succeed())
+
+			Expect(result.Spec.FeatureGates.EnableMultiArchBootImageImport).To(HaveValue(BeTrue()))
+		})
+	})
+
 	Context("virtualization", func() {
 		Context("v1 ==> v1beta1", func() {
 			It("should convert tuningPolicy", func() {
@@ -1520,6 +2285,7 @@ var _ = Describe("api/v1beta1", func() {
 						ProgressTimeout:                   new(int64(200)),
 						AllowAutoConverge:                 new(true),
 						AllowPostCopy:                     new(false),
+						AllowWorkloadDisruption:           new(true),
 					},
 				}
 
@@ -1533,6 +2299,7 @@ var _ = Describe("api/v1beta1", func() {
 				Expect(v1beta1Spec.LiveMigrationConfig.ProgressTimeout).To(HaveValue(Equal(int64(200))))
 				Expect(v1beta1Spec.LiveMigrationConfig.AllowAutoConverge).To(HaveValue(BeTrue()))
 				Expect(v1beta1Spec.LiveMigrationConfig.AllowPostCopy).To(HaveValue(BeFalse()))
+				Expect(v1beta1Spec.LiveMigrationConfig.AllowWorkloadDisruption).To(HaveValue(BeTrue()))
 			})
 
 			It("should convert PermittedHostDevices", func() {
@@ -1920,6 +2687,7 @@ var _ = Describe("api/v1beta1", func() {
 						ProgressTimeout:                   new(int64(200)),
 						AllowAutoConverge:                 new(true),
 						AllowPostCopy:                     new(false),
+						AllowWorkloadDisruption:           new(true),
 					},
 				}
 
@@ -1933,6 +2701,7 @@ var _ = Describe("api/v1beta1", func() {
 				Expect(v1VirtConfig.LiveMigrationConfig.ProgressTimeout).To(HaveValue(Equal(int64(200))))
 				Expect(v1VirtConfig.LiveMigrationConfig.AllowAutoConverge).To(HaveValue(BeTrue()))
 				Expect(v1VirtConfig.LiveMigrationConfig.AllowPostCopy).To(HaveValue(BeFalse()))
+				Expect(v1VirtConfig.LiveMigrationConfig.AllowWorkloadDisruption).To(HaveValue(BeTrue()))
 			})
 
 			It("should convert PermittedHostDevices", func() {
@@ -2455,10 +3224,11 @@ var _ = Describe("api/v1beta1", func() {
 					VMStateStorageClass: new("my-storage-class"),
 				}
 
-				v1Storage := convertStorageV1beta1ToV1(v1beta1Spec)
+				v1Spec := hcov1.HyperConvergedSpec{}
+				convertStorageV1beta1ToV1(v1beta1Spec, &v1Spec)
 
-				Expect(v1Storage).ToNot(BeNil())
-				Expect(v1Storage.VMStateStorageClass).To(HaveValue(Equal("my-storage-class")))
+				Expect(v1Spec.Storage).ToNot(BeNil())
+				Expect(v1Spec.Storage.VMStateStorageClass).To(HaveValue(Equal("my-storage-class")))
 			})
 
 			It("should convert ScratchSpaceStorageClass", func() {
@@ -2466,10 +3236,11 @@ var _ = Describe("api/v1beta1", func() {
 					ScratchSpaceStorageClass: new("scratch-class"),
 				}
 
-				v1Storage := convertStorageV1beta1ToV1(v1beta1Spec)
+				v1Spec := hcov1.HyperConvergedSpec{}
+				convertStorageV1beta1ToV1(v1beta1Spec, &v1Spec)
 
-				Expect(v1Storage).ToNot(BeNil())
-				Expect(v1Storage.ScratchSpaceStorageClass).To(HaveValue(Equal("scratch-class")))
+				Expect(v1Spec.Storage).ToNot(BeNil())
+				Expect(v1Spec.Storage.ScratchSpaceStorageClass).To(HaveValue(Equal("scratch-class")))
 			})
 
 			It("should convert StorageImport with InsecureRegistries", func() {
@@ -2479,31 +3250,34 @@ var _ = Describe("api/v1beta1", func() {
 					},
 				}
 
-				v1Storage := convertStorageV1beta1ToV1(v1beta1Spec)
+				v1Spec := hcov1.HyperConvergedSpec{}
+				convertStorageV1beta1ToV1(v1beta1Spec, &v1Spec)
 
-				Expect(v1Storage).ToNot(BeNil())
-				Expect(v1Storage.StorageImport).ToNot(BeNil())
-				Expect(v1Storage.StorageImport.InsecureRegistries).To(Equal([]string{"registry1.example.com", "registry2.example.com"}))
+				Expect(v1Spec.Storage).ToNot(BeNil())
+				Expect(v1Spec.Storage.StorageImport).ToNot(BeNil())
+				Expect(v1Spec.Storage.StorageImport.InsecureRegistries).To(Equal([]string{"registry1.example.com", "registry2.example.com"}))
 			})
 
-			It("should return nil when all storage fields are empty", func() {
+			It("should not set storage when all storage fields are empty", func() {
 				v1beta1Spec := HyperConvergedSpec{}
 
-				v1Storage := convertStorageV1beta1ToV1(v1beta1Spec)
+				v1Spec := hcov1.HyperConvergedSpec{}
+				convertStorageV1beta1ToV1(v1beta1Spec, &v1Spec)
 
-				Expect(v1Storage).To(BeNil())
+				Expect(v1Spec.Storage).To(BeNil())
 			})
 
-			It("should return nil when StorageImport has empty InsecureRegistries", func() {
+			It("should not set storage when StorageImport has empty InsecureRegistries", func() {
 				v1beta1Spec := HyperConvergedSpec{
 					StorageImport: &hcov1.StorageImportConfig{
 						InsecureRegistries: []string{},
 					},
 				}
 
-				v1Storage := convertStorageV1beta1ToV1(v1beta1Spec)
+				v1Spec := hcov1.HyperConvergedSpec{}
+				convertStorageV1beta1ToV1(v1beta1Spec, &v1Spec)
 
-				Expect(v1Storage).To(BeNil())
+				Expect(v1Spec.Storage).To(BeNil())
 			})
 
 			It("should convert FilesystemOverhead", func() {
@@ -2517,12 +3291,14 @@ var _ = Describe("api/v1beta1", func() {
 					},
 				}
 
-				v1Storage := convertStorageV1beta1ToV1(v1beta1Spec)
+				v1Spec := hcov1.HyperConvergedSpec{}
+				convertStorageV1beta1ToV1(v1beta1Spec, &v1Spec)
 
-				Expect(v1Storage.FilesystemOverhead).ToNot(BeNil())
-				Expect(v1Storage.FilesystemOverhead.Global).To(Equal(cdiv1beta1.Percent("0.5")))
-				Expect(v1Storage.FilesystemOverhead.StorageClass).To(HaveKeyWithValue("class-1", cdiv1beta1.Percent("0.3")))
-				Expect(v1Storage.FilesystemOverhead.StorageClass).To(HaveKeyWithValue("class-2", cdiv1beta1.Percent("0.2")))
+				Expect(v1Spec.Storage).ToNot(BeNil())
+				Expect(v1Spec.Storage.FilesystemOverhead).ToNot(BeNil())
+				Expect(v1Spec.Storage.FilesystemOverhead.Global).To(Equal(cdiv1beta1.Percent("0.5")))
+				Expect(v1Spec.Storage.FilesystemOverhead.StorageClass).To(HaveKeyWithValue("class-1", cdiv1beta1.Percent("0.3")))
+				Expect(v1Spec.Storage.FilesystemOverhead.StorageClass).To(HaveKeyWithValue("class-2", cdiv1beta1.Percent("0.2")))
 			})
 
 			It("should convert StorageWorkloads", func() {
@@ -2536,12 +3312,13 @@ var _ = Describe("api/v1beta1", func() {
 					},
 				}
 
-				v1Storage := convertStorageV1beta1ToV1(v1beta1Spec)
+				v1Spec := hcov1.HyperConvergedSpec{}
+				convertStorageV1beta1ToV1(v1beta1Spec, &v1Spec)
 
-				Expect(v1Storage).ToNot(BeNil())
-				Expect(v1Storage.WorkloadResourceRequirements).ToNot(BeNil())
-				Expect(v1Storage.WorkloadResourceRequirements.Limits).To(HaveLen(1))
-				Expect(v1Storage.WorkloadResourceRequirements.Limits).To(HaveKeyWithValue(corev1.ResourceCPU, resource.MustParse("100m")))
+				Expect(v1Spec.Storage).ToNot(BeNil())
+				Expect(v1Spec.Storage.WorkloadResourceRequirements).ToNot(BeNil())
+				Expect(v1Spec.Storage.WorkloadResourceRequirements.Limits).To(HaveLen(1))
+				Expect(v1Spec.Storage.WorkloadResourceRequirements.Limits).To(HaveKeyWithValue(corev1.ResourceCPU, resource.MustParse("100m")))
 			})
 
 			It("should convert all fields together", func() {
@@ -2567,25 +3344,26 @@ var _ = Describe("api/v1beta1", func() {
 					},
 				}
 
-				v1Storage := convertStorageV1beta1ToV1(v1beta1Spec)
+				v1Spec := hcov1.HyperConvergedSpec{}
+				convertStorageV1beta1ToV1(v1beta1Spec, &v1Spec)
 
-				Expect(v1Storage).ToNot(BeNil())
+				Expect(v1Spec.Storage).ToNot(BeNil())
 
-				Expect(v1Storage.VMStateStorageClass).To(HaveValue(Equal("vm-state-class")))
+				Expect(v1Spec.Storage.VMStateStorageClass).To(HaveValue(Equal("vm-state-class")))
 
-				Expect(v1Storage.ScratchSpaceStorageClass).To(HaveValue(Equal("scratch-class")))
+				Expect(v1Spec.Storage.ScratchSpaceStorageClass).To(HaveValue(Equal("scratch-class")))
 
-				Expect(v1Storage.StorageImport).ToNot(BeNil())
-				Expect(v1Storage.StorageImport.InsecureRegistries).To(Equal([]string{"registry.example.com"}))
+				Expect(v1Spec.Storage.StorageImport).ToNot(BeNil())
+				Expect(v1Spec.Storage.StorageImport.InsecureRegistries).To(Equal([]string{"registry.example.com"}))
 
-				Expect(v1Storage.FilesystemOverhead).ToNot(BeNil())
-				Expect(v1Storage.FilesystemOverhead.Global).To(Equal(cdiv1beta1.Percent("0.5")))
-				Expect(v1Storage.FilesystemOverhead.StorageClass).To(HaveKeyWithValue("class-1", cdiv1beta1.Percent("0.3")))
-				Expect(v1Storage.FilesystemOverhead.StorageClass).To(HaveKeyWithValue("class-2", cdiv1beta1.Percent("0.2")))
+				Expect(v1Spec.Storage.FilesystemOverhead).ToNot(BeNil())
+				Expect(v1Spec.Storage.FilesystemOverhead.Global).To(Equal(cdiv1beta1.Percent("0.5")))
+				Expect(v1Spec.Storage.FilesystemOverhead.StorageClass).To(HaveKeyWithValue("class-1", cdiv1beta1.Percent("0.3")))
+				Expect(v1Spec.Storage.FilesystemOverhead.StorageClass).To(HaveKeyWithValue("class-2", cdiv1beta1.Percent("0.2")))
 
-				Expect(v1Storage.WorkloadResourceRequirements).ToNot(BeNil())
-				Expect(v1Storage.WorkloadResourceRequirements.Limits).To(HaveLen(1))
-				Expect(v1Storage.WorkloadResourceRequirements.Limits).To(HaveKeyWithValue(corev1.ResourceCPU, resource.MustParse("100m")))
+				Expect(v1Spec.Storage.WorkloadResourceRequirements).ToNot(BeNil())
+				Expect(v1Spec.Storage.WorkloadResourceRequirements.Limits).To(HaveLen(1))
+				Expect(v1Spec.Storage.WorkloadResourceRequirements.Limits).To(HaveKeyWithValue(corev1.ResourceCPU, resource.MustParse("100m")))
 			})
 		})
 
@@ -2599,10 +3377,11 @@ var _ = Describe("api/v1beta1", func() {
 					},
 				}
 
-				v1Storage := convertStorageV1beta1ToV1(original)
+				v1Spec := hcov1.HyperConvergedSpec{}
+				convertStorageV1beta1ToV1(original, &v1Spec)
 
 				var result HyperConvergedSpec
-				convertStorageV1ToV1beta1(v1Storage, &result)
+				convertStorageV1ToV1beta1(v1Spec.Storage, &result)
 
 				Expect(result.VMStateStorageClass).To(HaveValue(Equal("vm-state-class")))
 				Expect(result.ScratchSpaceStorageClass).To(HaveValue(Equal("scratch-class")))
@@ -2622,13 +3401,14 @@ var _ = Describe("api/v1beta1", func() {
 				var v1beta1Spec HyperConvergedSpec
 				convertStorageV1ToV1beta1(original, &v1beta1Spec)
 
-				result := convertStorageV1beta1ToV1(v1beta1Spec)
+				v1Spec := hcov1.HyperConvergedSpec{}
+				convertStorageV1beta1ToV1(v1beta1Spec, &v1Spec)
 
-				Expect(result).ToNot(BeNil())
-				Expect(result.VMStateStorageClass).To(HaveValue(Equal("vm-state-class")))
-				Expect(result.ScratchSpaceStorageClass).To(HaveValue(Equal("scratch-class")))
-				Expect(result.StorageImport).ToNot(BeNil())
-				Expect(result.StorageImport.InsecureRegistries).To(Equal([]string{"registry.example.com"}))
+				Expect(v1Spec.Storage).ToNot(BeNil())
+				Expect(v1Spec.Storage.VMStateStorageClass).To(HaveValue(Equal("vm-state-class")))
+				Expect(v1Spec.Storage.ScratchSpaceStorageClass).To(HaveValue(Equal("scratch-class")))
+				Expect(v1Spec.Storage.StorageImport).ToNot(BeNil())
+				Expect(v1Spec.Storage.StorageImport.InsecureRegistries).To(Equal([]string{"registry.example.com"}))
 			})
 		})
 	})
@@ -3895,6 +4675,132 @@ var _ = Describe("api/v1beta1", func() {
 			),
 		)
 
+		DescribeTable("should round-trip, keeping the PersistentReservationConfiguration.Enabled field", func(fieldValue bool, v1FG hcofg.HyperConvergedFeatureGates, expectedAnnotation string) {
+			v1HC := getV1HC()
+			v1HC.Spec.Deployment.DeployNetworkResourcesInjector = nil
+			v1HC.Spec.Storage = &hcov1.StorageConfig{
+				PersistentReservationConfiguration: &hcov1.PersistentReservationConfiguration{Enabled: new(fieldValue)},
+			}
+			v1HC.Spec.FeatureGates = v1FG
+
+			_, originalExists := v1FG.IsExplicitlyEnabled(PersistentReservationFGName)
+
+			v1beta1HC := &HyperConverged{}
+			Expect(v1beta1HC.ConvertFrom(v1HC)).To(Succeed())
+			Expect(v1beta1HC.Annotations).To(HaveKeyWithValue(v1OnlyFieldAnnotation, MatchJSON(expectedAnnotation)))
+
+			roundTripHC := &hcov1.HyperConverged{}
+			Expect(v1beta1HC.ConvertTo(roundTripHC)).To(Succeed())
+
+			Expect(roundTripHC.Annotations).ToNot(HaveKey(v1OnlyFieldAnnotation))
+			Expect(roundTripHC.Spec.Storage).ToNot(BeNil())
+			Expect(roundTripHC.Spec.Storage.PersistentReservationConfiguration).ToNot(BeNil())
+			Expect(roundTripHC.Spec.Storage.PersistentReservationConfiguration.Enabled).To(HaveValue(Equal(fieldValue)))
+
+			enabled, exists := roundTripHC.Spec.FeatureGates.IsExplicitlyEnabled(PersistentReservationFGName)
+			Expect(exists).To(Equal(originalExists))
+			Expect(enabled).To(Equal(originalExists && fieldValue))
+		},
+			Entry("when the field is false", false, nil, `{"persistentReservationEnabled": false}`),
+			Entry("when the field is true", true, nil, `{"persistentReservationEnabled": true}`),
+			Entry("when the field is false, and FG is true (implicit)",
+				false,
+				hcofg.HyperConvergedFeatureGates{{Name: PersistentReservationFGName}},
+				`{"persistentReservationEnabled": false, "featureGates": [{"name": "persistentReservation"}]}`,
+			),
+			Entry("when the field is false, and FG is true",
+				false,
+				hcofg.HyperConvergedFeatureGates{{Name: PersistentReservationFGName, State: new(hcofg.Enabled)}},
+				`{"persistentReservationEnabled": false, "featureGates": [{"name": "persistentReservation", "state": "Enabled"}]}`,
+			),
+			Entry("when the field is true, and FG is false",
+				true,
+				hcofg.HyperConvergedFeatureGates{{Name: PersistentReservationFGName, State: new(hcofg.Disabled)}},
+				`{"persistentReservationEnabled": true, "featureGates": [{"name": "persistentReservation", "state": "Disabled"}]}`,
+			),
+			Entry("when the field is true, and FG is true (implicit)",
+				true,
+				hcofg.HyperConvergedFeatureGates{{Name: PersistentReservationFGName}},
+				`{"persistentReservationEnabled": true, "featureGates": [{"name": "persistentReservation"}]}`,
+			),
+			Entry("when the field is true, and FG is true",
+				true,
+				hcofg.HyperConvergedFeatureGates{{Name: PersistentReservationFGName, State: new(hcofg.Enabled)}},
+				`{"persistentReservationEnabled": true, "featureGates": [{"name": "persistentReservation", "state": "Enabled"}]}`,
+			),
+			Entry("when the field is false, and FG is false",
+				false,
+				hcofg.HyperConvergedFeatureGates{{Name: PersistentReservationFGName, State: new(hcofg.Disabled)}},
+				`{"persistentReservationEnabled": false, "featureGates": [{"name": "persistentReservation", "state": "Disabled"}]}`,
+			),
+		)
+
+		It("should round-trip when PersistentReservationConfiguration.Enabled field is nil", func() {
+			v1HC := getV1HC()
+			v1HC.Spec.Deployment.DeployNetworkResourcesInjector = nil
+			v1HC.Spec.Storage = &hcov1.StorageConfig{
+				PersistentReservationConfiguration: &hcov1.PersistentReservationConfiguration{},
+			}
+			v1beta1HC := &HyperConverged{}
+
+			Expect(v1beta1HC.ConvertFrom(v1HC)).To(Succeed())
+			Expect(v1beta1HC.Annotations).ToNot(HaveKey(v1OnlyFieldAnnotation))
+
+			roundTripHC := &hcov1.HyperConverged{}
+			Expect(v1beta1HC.ConvertTo(roundTripHC)).To(Succeed())
+
+			Expect(roundTripHC.Annotations).ToNot(HaveKey(v1OnlyFieldAnnotation))
+			// Storage is nil after round-trip because nil Enabled produces no annotation
+			// entry (omitempty) and no v1beta1 FG, so nothing triggers Storage creation.
+			// This is semantically equivalent to the original nil Enabled.
+			Expect(roundTripHC.Spec.Storage).To(BeNil())
+		})
+
+		DescribeTable("should round-trip, keeping the persistentReservation feature gate", func(fgs hcofg.HyperConvergedFeatureGates, expectedAnnotation gomegatypes.GomegaMatcher, isEnabled, isFound bool) {
+			v1HC := getV1HC()
+			v1HC.Spec.FeatureGates = fgs
+			v1HC.Spec.Deployment.DeployNetworkResourcesInjector = nil
+
+			v1beta1HC := &HyperConverged{}
+			Expect(v1beta1HC.ConvertFrom(v1HC)).To(Succeed())
+			Expect(v1beta1HC.Annotations).To(expectedAnnotation)
+
+			roundTripHC := &hcov1.HyperConverged{}
+			Expect(v1beta1HC.ConvertTo(roundTripHC)).To(Succeed())
+
+			Expect(roundTripHC.Annotations).ToNot(HaveKey(v1OnlyFieldAnnotation))
+			enabled, found := roundTripHC.Spec.FeatureGates.IsExplicitlyEnabled(PersistentReservationFGName)
+			Expect(enabled).To(Equal(isEnabled))
+			Expect(found).To(Equal(isFound))
+		},
+			Entry("when FG list is nil", nil, Not(HaveKey(v1OnlyFieldAnnotation)), false, false),
+			Entry("when FG list is empty", hcofg.HyperConvergedFeatureGates{}, Not(HaveKey(v1OnlyFieldAnnotation)), false, false),
+			Entry("when the persistentReservation FG is not set",
+				hcofg.HyperConvergedFeatureGates{{Name: "somethingElse"}},
+				HaveKeyWithValue(v1OnlyFieldAnnotation, MatchJSON(`{"featureGates": [{"name": "somethingElse"}]}`)),
+				false,
+				false,
+			),
+			Entry("when the persistentReservation FG is implicitly enabled",
+				hcofg.HyperConvergedFeatureGates{{Name: PersistentReservationFGName}},
+				HaveKeyWithValue(v1OnlyFieldAnnotation, MatchJSON(`{"featureGates": [{"name": "persistentReservation"}]}`)),
+				true,
+				true,
+			),
+			Entry("when the persistentReservation FG is explicitly enabled",
+				hcofg.HyperConvergedFeatureGates{{Name: PersistentReservationFGName, State: new(hcofg.Enabled)}},
+				HaveKeyWithValue(v1OnlyFieldAnnotation, MatchJSON(`{"featureGates": [{"name": "persistentReservation", "state": "Enabled"}]}`)),
+				true,
+				true,
+			),
+			Entry("when the persistentReservation FG is disabled",
+				hcofg.HyperConvergedFeatureGates{{Name: PersistentReservationFGName, State: new(hcofg.Disabled)}},
+				HaveKeyWithValue(v1OnlyFieldAnnotation, MatchJSON(`{"featureGates": [{"name": "persistentReservation", "state": "Disabled"}]}`)),
+				false,
+				true,
+			),
+		)
+
 		// keep this up-to-date, and the last test case in this context
 		It("should round-trip, keeping v1-only fields", func() {
 			v1HC := getV1HC()
@@ -3904,21 +4810,43 @@ var _ = Describe("api/v1beta1", func() {
 				Enabled: new(false),
 			}
 			v1HC.Spec.FeatureGates.Enable(DisableMDevConfigurationFG)
+			v1HC.Spec.Storage = &hcov1.StorageConfig{
+				PersistentReservationConfiguration: &hcov1.PersistentReservationConfiguration{
+					Enabled: new(true),
+				},
+			}
+			v1HC.Spec.FeatureGates.Enable(PersistentReservationFGName)
 			v1HC.Spec.FeatureGates.Disable("aDisabledFG")
 			v1HC.Spec.FeatureGates.Enable("explicitlyEnabledFG")
 			v1HC.Spec.FeatureGates = append(v1HC.Spec.FeatureGates, hcofg.FeatureGate{Name: "implicitlyEnabledFG"})
+			v1HC.Spec.Observability = &hcov1.ObservabilityConfig{
+				AllowedAlerts:         []string{"KubeVirtVMDown", "KubeVirtVMIExcessiveMigrations"},
+				AllowedRecordingRules: []string{"kubevirt_vmi_phase_count:sum"},
+				Workloads: &hcov1.ObservabilityWorkloadsConfig{
+					AllowedMetrics: []string{"kubevirt_vmi_memory_used_bytes"},
+				},
+			}
 			v1beta1HC := &HyperConverged{}
 
 			Expect(v1beta1HC.ConvertFrom(v1HC)).To(Succeed())
 			const expectedJSONAnnotation = `{
 	"deployNetworkResourcesInjector": false,
 	"mdevConfigEnable": false,
+	"persistentReservationEnabled": true,
 	"featureGates": [
 		{"name": "disableMDevConfiguration", "state": "Enabled"},
+		{"name": "persistentReservation", "state": "Enabled"},
 		{"name": "aDisabledFG", "state": "Disabled"},
 		{"name": "explicitlyEnabledFG", "state": "Enabled"},
 		{"name": "implicitlyEnabledFG"}
-	]
+	],
+	"observability": {
+		"workloads": {
+			"allowedMetrics": ["kubevirt_vmi_memory_used_bytes"]
+		},
+		"allowedAlerts": ["KubeVirtVMDown", "KubeVirtVMIExcessiveMigrations"],
+		"allowedRecordingRules": ["kubevirt_vmi_phase_count:sum"]
+	}
 }`
 			Expect(v1beta1HC.Annotations).To(HaveKeyWithValue(v1OnlyFieldAnnotation, MatchJSON(expectedJSONAnnotation)))
 
@@ -3929,6 +4857,10 @@ var _ = Describe("api/v1beta1", func() {
 			Expect(roundTripHC.Spec.Deployment.DeployNetworkResourcesInjector).To(HaveValue(BeFalse()))
 			Expect(roundTripHC.Spec.Virtualization.MediatedDevicesConfiguration).ToNot(BeNil())
 			Expect(roundTripHC.Spec.Virtualization.MediatedDevicesConfiguration.Enabled).To(HaveValue(BeFalse()))
+
+			Expect(roundTripHC.Spec.Storage).ToNot(BeNil())
+			Expect(roundTripHC.Spec.Storage.PersistentReservationConfiguration).ToNot(BeNil())
+			Expect(roundTripHC.Spec.Storage.PersistentReservationConfiguration.Enabled).To(HaveValue(BeTrue()))
 
 			Expect(roundTripHC.Spec.FeatureGates.IsEnabled(DisableMDevConfigurationFG)).To(BeTrue())
 
@@ -3943,6 +4875,12 @@ var _ = Describe("api/v1beta1", func() {
 			enabled, found = roundTripHC.Spec.FeatureGates.IsExplicitlyEnabled("implicitlyEnabledFG")
 			Expect(found).To(BeTrue())
 			Expect(enabled).To(BeTrue())
+
+			Expect(roundTripHC.Spec.Observability).ToNot(BeNil())
+			Expect(roundTripHC.Spec.Observability.AllowedAlerts).To(ConsistOf("KubeVirtVMDown", "KubeVirtVMIExcessiveMigrations"))
+			Expect(roundTripHC.Spec.Observability.AllowedRecordingRules).To(ConsistOf("kubevirt_vmi_phase_count:sum"))
+			Expect(roundTripHC.Spec.Observability.Workloads).ToNot(BeNil())
+			Expect(roundTripHC.Spec.Observability.Workloads.AllowedMetrics).To(ConsistOf("kubevirt_vmi_memory_used_bytes"))
 		})
 	})
 })
