@@ -57,6 +57,7 @@ import (
 	cdiv1beta1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
 	migrationv1alpha1 "kubevirt.io/kubevirt-migration-operator/api/v1alpha1"
 	sspv1beta3 "kubevirt.io/ssp-operator/api/v1beta3"
+	vmfr "kubevirt.io/vm-file-restore-operator/api/v1alpha1"
 
 	"github.com/kubevirt/hyperconverged-cluster-operator/api"
 	hcov1 "github.com/kubevirt/hyperconverged-cluster-operator/api/v1"
@@ -100,6 +101,7 @@ var (
 		cdiv1beta1.AddToScheme,
 		networkaddonsv1.AddToScheme,
 		sspv1beta3.AddToScheme,
+		vmfr.AddToScheme,
 		csvv1alpha1.AddToScheme,
 		admissionregistrationv1.AddToScheme,
 		consolev1.Install,
@@ -309,11 +311,6 @@ func main() {
 	err = collectors.SetupCollectors(mgr.GetClient(), operatorNamespace)
 	cmdHelper.ExitOnError(err, "failed to setup metrics controllers: %v")
 
-	if ci.IsOpenshift() {
-		err = checkWaspAgentImageEnvExists()
-		cmdHelper.ExitOnError(err, "failed to retrieve wasp agent image env var")
-	}
-
 	err = checkAIEWebhookImageEnvExists()
 	cmdHelper.ExitOnError(err, "failed to retrieve AIE webhook image env var")
 
@@ -354,6 +351,7 @@ func getCacheOption(operatorNamespace string, ci hcoutil.ClusterInfo, persesAvai
 			&sspv1beta3.SSP{}:                      {},
 			&aaqv1alpha1.AAQ{}:                     {},
 			&migrationv1alpha1.MigController{}:     {},
+			&vmfr.FileRestoreOperator{}:            {},
 			&schedulingv1.PriorityClass{}: {
 				Label: labels.SelectorFromSet(labels.Set{hcoutil.AppLabel: hcoutil.HyperConvergedName}),
 			},
@@ -520,14 +518,6 @@ func createPriorityClass(ctx context.Context, mgr manager.Manager) error {
 	}
 
 	return err
-}
-
-func checkWaspAgentImageEnvExists() error {
-	if _, exists := os.LookupEnv(hcoutil.WaspAgentImageEnvV); !exists {
-		return fmt.Errorf("%s env var not found", hcoutil.WaspAgentImageEnvV)
-	}
-
-	return nil
 }
 
 func checkAIEWebhookImageEnvExists() error {

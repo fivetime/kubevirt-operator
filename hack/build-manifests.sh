@@ -238,6 +238,7 @@ create_autopilot_csv() {
     --operator-version=${AUTOPILOT_VERSION} \
     --operator-image=${AUTOPILOT_IMAGE} \
     --pull-policy=IfNotPresent \
+    --additional-images=RELATED_IMAGE_KUBEVIRT_METRICS_EXPORTER:${KUBEVIRT_METRICS_EXPORTER_IMAGE} \
   "
   gen_csv ${DEFAULT_CSV_GENERATOR} ${operatorName} "${AUTOPILOT_IMAGE}" ${dumpCRDsArg} ${operatorArgs}
   echo "${operatorName}"
@@ -372,7 +373,6 @@ ${TOOLS}/manifest-templator \
   --webhook-image="${HCO_WEBHOOK_IMAGE}" \
   --cli-downloads-image="${HCO_DOWNLOADS_IMAGE}" \
   --network-resources-injector-image-name="${NETWORK_RESOURCES_INJECTOR_IMAGE}" \
-  --wasp-agent-image-name="${WASP_AGENT_IMAGE}" \
   --aie-webhook-image-name="${AIE_WEBHOOK_IMAGE}" \
   --observability-controller-image-name="${OBSERVABILITY_CONTROLLER_IMAGE}"
 
@@ -438,7 +438,6 @@ ${TOOLS}/csv-merger \
   --kubevirt-consoleproxy-image-name="${KUBEVIRT_CONSOLE_PROXY_IMAGE}" \
   --cli-downloads-image-name="${HCO_DOWNLOADS_IMAGE}" \
   --network-resources-injector-image-name="${NETWORK_RESOURCES_INJECTOR_IMAGE}" \
-  --wasp-agent-image-name="${WASP_AGENT_IMAGE}" \
   --aie-webhook-image-name="${AIE_WEBHOOK_IMAGE}" \
   --observability-controller-image-name="${OBSERVABILITY_CONTROLLER_IMAGE}" \
   ${NETWORK_POLICIES_PARAMS} \
@@ -461,6 +460,7 @@ rendered_keywords="$(echo "$rendered_csv" |grep 'keywords' -A 3)"
 rm -f ${CRD_DIR}/*
 cp -f ${TEMPDIR}/*.${CRD_EXT} ${CRD_DIR}
 cp -f ${TEMPDIR}/*.${CRD_EXT} ${CSV_DIR}
+cp tools/csv-merger/generated-crd.yaml ${CSV_DIR}/hco00.crd.yaml
 
 # Validate the yaml files
 (cd ${CRD_DIR} && $CRI_BIN run --rm -v "$(pwd)":/yaml quay.io/pusher/yamllint yamllint -d "{extends: relaxed, rules: {line-length: disable}}" /yaml)

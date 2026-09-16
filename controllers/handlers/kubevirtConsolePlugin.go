@@ -17,6 +17,7 @@ import (
 	openshiftconfigv1 "github.com/openshift/api/config/v1"
 	consolev1 "github.com/openshift/api/console/v1"
 	operatorv1 "github.com/openshift/api/operator/v1"
+	"golang.org/x/exp/constraints"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -140,6 +141,11 @@ func NewKvUIPluginDeployment(hc *hcov1.HyperConverged) *appsv1.Deployment {
 	deployment := getKvUIDeployment(hc, kvUIPluginDeploymentName, kvUIPluginImage,
 		kvUIPluginServingCertName, kvUIPluginServingCertPath, hcoutil.UIPluginServerPort, hcoutil.AppComponentUIPlugin)
 
+	// The nginx entrypoint, the /usr/libexec/s2i/run script, calls the generate_container_user that writes to the root
+	// file system. We can't set the ReadOnlyRootFilesystem field for this container.
+	// TODO: remove this when the image is fixed.
+	deployment.Spec.Template.Spec.Containers[0].SecurityContext.ReadOnlyRootFilesystem = nil
+
 	nginxVolumeMount := corev1.VolumeMount{
 		Name:      nginxConfigMapName,
 		MountPath: "/etc/nginx/nginx.conf",
@@ -178,18 +184,18 @@ func NewKvUIProxyDeployment(hc *hcov1.HyperConverged) *appsv1.Deployment {
 
 	var args []string
 	if minTLSVersion < tls.VersionTLS13 && len(ciphers) > 0 {
-		cipherStrs := make([]string, len(ciphers))
-		for i := range ciphers {
-			cipherStrs[i] = strconv.Itoa(int(ciphers[i]))
-		}
-
-		cipherSuiteStr := strings.Join(cipherStrs, ",")
+		cipherSuiteStr := numericListToCommaString(ciphers)
 		arg := fmt.Sprintf("--tls-cipher-suites=%s", cipherSuiteStr)
 		args = append(args, arg)
 	}
 
 	arg := fmt.Sprintf("--tls-min-version=%d", minTLSVersion)
 	args = append(args, arg)
+
+	if tlsCurves := numericListToCommaString(tlssecprofile.GetGroupsInGolangFormat(hc.Spec.Security.TLSSecurityProfile)); tlsCurves != "" {
+		arg = fmt.Sprintf("--tls-curve-ids=%s", tlsCurves)
+		args = append(args, arg)
+	}
 
 	deployment.Spec.Template.Spec.Containers[0].Args = append(deployment.Spec.Template.Spec.Containers[0].Args, args...)
 
@@ -379,6 +385,7 @@ type nginxConfTemplateData struct {
 	Port         int32
 	SSLProtocols string
 	SSLCiphers   string
+	SSLECDHCurve string
 }
 
 func getNginxConfig(hc *hcov1.HyperConverged) (string, error) {
@@ -390,6 +397,14 @@ func getNginxConfig(hc *hcov1.HyperConverged) (string, error) {
 
 	if minTLS < openshiftconfigv1.VersionTLS13 {
 		data.SSLCiphers = strings.Join(ciphers, ":")
+	}
+
+	if groups := tlssecprofile.GetFIPSCompliantGroups(hc.Spec.Security.TLSSecurityProfile); len(groups) > 0 {
+		groupStrs := make([]string, len(groups))
+		for i, g := range groups {
+			groupStrs[i] = string(g)
+		}
+		data.SSLECDHCurve = strings.Join(groupStrs, ":")
 	}
 
 	var out bytes.Buffer
@@ -780,4 +795,12 @@ func NewKVAPIServerProxyNetworkPolicyHandler(cli client.Client, schm *runtime.Sc
 	np := newKVAPIServerProxyNetworkPolicy()
 
 	return operands.NewNetworkPolicyHandler(cli, schm, np)
+}
+
+func numericListToCommaString[T constraints.Integer](values []T) string {
+	s := make([]string, len(values))
+	for i, value := range values {
+		s[i] = strconv.Itoa(int(value))
+	}
+	return strings.Join(s, ",")
 }

@@ -41,6 +41,7 @@ import (
 	sdkapi "kubevirt.io/controller-lifecycle-operator-sdk/api"
 	migrationv1alpha1 "kubevirt.io/kubevirt-migration-operator/api/v1alpha1"
 	sspv1beta3 "kubevirt.io/ssp-operator/api/v1beta3"
+	vmfrv1alpha1 "kubevirt.io/vm-file-restore-operator/api/v1alpha1"
 
 	"github.com/kubevirt/hyperconverged-cluster-operator/api"
 	hcov1 "github.com/kubevirt/hyperconverged-cluster-operator/api/v1"
@@ -183,6 +184,7 @@ func GetScheme() *runtime.Scheme {
 			csvv1alpha1.AddToScheme,
 			aaqv1alpha1.AddToScheme,
 			migrationv1alpha1.AddToScheme,
+			vmfrv1alpha1.AddToScheme,
 			deschedulerv1.AddToScheme,
 			rbacv1.AddToScheme,
 			networkingv1.AddToScheme,
@@ -214,7 +216,7 @@ type RepresentConditionMatcher struct {
 
 // Match - compares two conditions
 // two conditions are the same if they have the same type, status, reason, and message
-func (matcher *RepresentConditionMatcher) Match(actual interface{}) (success bool, err error) {
+func (matcher *RepresentConditionMatcher) Match(actual any) (success bool, err error) {
 	actualCondition, ok := actual.(metav1.Condition)
 	if !ok {
 		return false, fmt.Errorf("RepresentConditionMatcher expects a Condition")
@@ -235,11 +237,11 @@ func (matcher *RepresentConditionMatcher) Match(actual interface{}) (success boo
 	return true, nil
 }
 
-func (matcher *RepresentConditionMatcher) FailureMessage(actual interface{}) (message string) {
+func (matcher *RepresentConditionMatcher) FailureMessage(actual any) (message string) {
 	return fmt.Sprintf("Expected\n\t%#v\nto match the condition\n\t%#v", actual, matcher.expected)
 }
 
-func (matcher *RepresentConditionMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+func (matcher *RepresentConditionMatcher) NegatedFailureMessage(actual any) (message string) {
 	return fmt.Sprintf("Expected\n\t%#v\nnot to match the condition\n\t%#v", actual, matcher.expected)
 }
 
@@ -264,9 +266,6 @@ func (ClusterInfoMock) IsRunningLocally() bool {
 }
 func (ClusterInfoMock) IsManagedByOLM() bool {
 	return true
-}
-func (ClusterInfoMock) GetBaseDomain() string {
-	return BaseDomain
 }
 func (c ClusterInfoMock) IsConsolePluginImageProvided() bool {
 	return true

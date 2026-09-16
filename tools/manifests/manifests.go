@@ -19,6 +19,7 @@ import (
 	cdiapi "kubevirt.io/containerized-data-importer-api/pkg/apis/core"
 	migrationapi "kubevirt.io/kubevirt-migration-operator/api/v1alpha1"
 	sspapi "kubevirt.io/ssp-operator/api/v1beta3"
+	vmfr "kubevirt.io/vm-file-restore-operator/api/v1alpha1"
 
 	"github.com/kubevirt/hyperconverged-cluster-operator/pkg/components"
 	"github.com/kubevirt/hyperconverged-cluster-operator/pkg/util"
@@ -36,7 +37,6 @@ type DeploymentOperatorParams struct {
 	KVUIPluginImage               string
 	KVUIProxyImage                string
 	NetworkResourcesInjectorImage string
-	WaspAgentImage                string
 	AIEWebhookImage               string
 	ObservabilityControllerImage  string
 	ImagePullPolicy               string
@@ -229,10 +229,6 @@ func buildOperatorEnvVars(params *DeploymentOperatorParams) []corev1.EnvVar {
 			Value: params.NetworkResourcesInjectorImage,
 		},
 		{
-			Name:  util.WaspAgentImageEnvV,
-			Value: params.WaspAgentImage,
-		},
-		{
 			Name:  util.AIEWebhookImageEnvV,
 			Value: params.AIEWebhookImage,
 		},
@@ -307,6 +303,19 @@ func GetDeploymentSpecCliDownloads(params *DeploymentOperatorParams) appsv1.Depl
 						ReadinessProbe:           getReadinessProbe("/health", util.CliDownloadsServerPort),
 						LivenessProbe:            getLivenessProbe("/health", util.CliDownloadsServerPort),
 						TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
+						VolumeMounts: []corev1.VolumeMount{
+							{Name: "nginx-tmp", MountPath: "/tmp"},
+						},
+					},
+				},
+				Volumes: []corev1.Volume{
+					{
+						Name: "nginx-tmp",
+						VolumeSource: corev1.VolumeSource{
+							EmptyDir: &corev1.EmptyDirVolumeSource{
+								SizeLimit: new(resource.MustParse("256Mi")),
+							},
+						},
 					},
 				},
 				PriorityClassName: "system-cluster-critical",
@@ -523,6 +532,7 @@ func GetClusterPermissions() []rbacv1.PolicyRule {
 		roleWithAllPermissions(cnaoapi.GroupVersion.Group, stringListToSlice("networkaddonsconfigs", "networkaddonsconfigs/finalizers")),
 		roleWithAllPermissions(aaqapi.GroupName, stringListToSlice("aaqs", "aaqs/finalizers")),
 		roleWithAllPermissions(migrationapi.GroupVersion.Group, stringListToSlice("migcontrollers", "migcontrollers/finalizers")),
+		roleWithAllPermissions(vmfr.GroupVersion.Group, stringListToSlice("filerestoreoperators", "filerestoreoperators/finalizers")),
 		roleWithAllPermissions("", stringListToSlice("configmaps")),
 		{
 			APIGroups: emptyAPIGroup,

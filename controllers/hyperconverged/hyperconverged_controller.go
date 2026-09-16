@@ -2,6 +2,7 @@ package hyperconverged
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -46,6 +47,7 @@ import (
 	cdiv1beta1 "kubevirt.io/containerized-data-importer-api/pkg/apis/core/v1beta1"
 	migrationv1alpha1 "kubevirt.io/kubevirt-migration-operator/api/v1alpha1"
 	sspv1beta3 "kubevirt.io/ssp-operator/api/v1beta3"
+	vmfr "kubevirt.io/vm-file-restore-operator/api/v1alpha1"
 
 	hcov1 "github.com/kubevirt/hyperconverged-cluster-operator/api/v1"
 	"github.com/kubevirt/hyperconverged-cluster-operator/controllers/alerts"
@@ -173,6 +175,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler, ci hcoutil.ClusterInfo, in
 		&networkaddonsv1.NetworkAddonsConfig{},
 		&aaqv1alpha1.AAQ{},
 		&migrationv1alpha1.MigController{},
+		&vmfr.FileRestoreOperator{},
 		&schedulingv1.PriorityClass{},
 		&corev1.ConfigMap{},
 		&corev1.Service{},
@@ -435,7 +438,7 @@ func (r *ReconcileHyperConverged) doReconcile(req *common.HcoRequest) (reconcile
 func (r *ReconcileHyperConverged) handleUpgrade(req *common.HcoRequest) (*reconcile.Result, error) {
 	modified, err := r.migrateBeforeUpgrade(req)
 	if err != nil {
-		return &reconcile.Result{RequeueAfter: requeueAfter}, err
+		return new(reconcile.Result), err
 	}
 
 	if modified {
@@ -493,6 +496,11 @@ func updateStatus(req *common.HcoRequest) {
 
 	if workloadsArch := nodeinfo.GetWorkloadsArchitectures(); slices.Compare(req.Instance.Status.NodeInfo.WorkloadsArchitectures, workloadsArch) != 0 {
 		req.Instance.Status.NodeInfo.WorkloadsArchitectures = workloadsArch
+		req.StatusDirty = true
+	}
+
+	if defaultArch := nodeinfo.GetDefaultArchitecture(); defaultArch != req.Instance.Status.NodeInfo.DefaultWorkloadArchitecture {
+		req.Instance.Status.NodeInfo.DefaultWorkloadArchitecture = defaultArch
 		req.StatusDirty = true
 	}
 }
@@ -1173,23 +1181,26 @@ func (r *ReconcileHyperConverged) applyUpgradePatches(req *common.HcoRequest) (b
 }
 
 func (r *ReconcileHyperConverged) removeLeftover(req *common.HcoRequest, knownHcoSV semver.Version, p upgradepatch.ObjectToBeRemoved) (bool, error) {
-	if p.IsAffectedRange(knownHcoSV) {
-		removeRelatedObject(req, r.client, p.GroupVersionKind, p.ObjectKey)
-		u := &unstructured.Unstructured{}
-		u.SetGroupVersionKind(p.GroupVersionKind)
-		gerr := r.client.Get(req.Ctx, p.ObjectKey, u)
-		if gerr != nil {
-			if apierrors.IsNotFound(gerr) {
-				return false, nil
-			}
-
-			req.Logger.Error(gerr, "failed looking for leftovers", "objectToBeRemoved", p)
-			return false, gerr
-		}
-		return r.deleteObj(req, u, false)
-
+	if !p.IsAffectedRange(knownHcoSV) {
+		return false, nil
 	}
-	return false, nil
+	removeRelatedObject(req, r.client, p.GroupVersionKind, p.ObjectKey)
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(p.GroupVersionKind)
+	gerr := r.client.Get(req.Ctx, p.ObjectKey, u)
+	if gerr != nil {
+		if apierrors.IsNotFound(gerr) {
+			return false, nil
+		}
+
+		if _, isNonMatchErr := errors.AsType[*apimetav1.NoKindMatchError](gerr); isNonMatchErr {
+			return false, nil
+		}
+
+		req.Logger.Error(gerr, "failed looking for leftovers", "objectToBeRemoved", p)
+		return false, gerr
+	}
+	return r.deleteObj(req, u, false)
 }
 
 func (r *ReconcileHyperConverged) deleteObj(req *common.HcoRequest, obj client.Object, protectNonHCOObjects bool) (bool, error) {

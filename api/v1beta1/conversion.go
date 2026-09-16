@@ -161,7 +161,7 @@ func convertVirtualizationV1ToV1beta1(v1VirtConfig hcov1.VirtualizationConfig, v
 
 	if v1VirtConfig.MediatedDevicesConfiguration != nil {
 		v1beta1Spec.MediatedDevicesConfiguration = &MediatedDevicesConfiguration{}
-		if err := converter.Convert(v1VirtConfig.MediatedDevicesConfiguration, v1beta1Spec.MediatedDevicesConfiguration, converter.DefaultMeta(reflect.TypeOf(&MediatedDevicesConfiguration{}))); err != nil {
+		if err := converter.Convert(v1VirtConfig.MediatedDevicesConfiguration, v1beta1Spec.MediatedDevicesConfiguration, converter.DefaultMeta(reflect.TypeFor[*MediatedDevicesConfiguration]())); err != nil {
 			return err
 		}
 	}
@@ -257,7 +257,7 @@ func convertVirtualizationV1beta1ToV1(v1beta1Spec HyperConvergedSpec, v1VirtConf
 			v1VirtConfig.MediatedDevicesConfiguration = &hcov1.MediatedDevicesConfiguration{}
 		}
 
-		if err := converter.Convert(v1beta1Spec.MediatedDevicesConfiguration, v1VirtConfig.MediatedDevicesConfiguration, converter.DefaultMeta(reflect.TypeOf(&hcov1.MediatedDevicesConfiguration{}))); err != nil {
+		if err := converter.Convert(v1beta1Spec.MediatedDevicesConfiguration, v1VirtConfig.MediatedDevicesConfiguration, converter.DefaultMeta(reflect.TypeFor[*hcov1.MediatedDevicesConfiguration]())); err != nil {
 			return err
 		}
 	}
@@ -413,7 +413,6 @@ func convertNetworkingV1ToV1beta1(v1Networking *hcov1.NetworkingConfig, v1beta1S
 	if v1Networking.KubeMacPoolConfiguration != nil {
 		v1beta1Spec.KubeMacPoolConfiguration = v1Networking.KubeMacPoolConfiguration.DeepCopy()
 	}
-	v1beta1Spec.KubeSecondaryDNSNameServerIP = setPtr(v1Networking.KubeSecondaryDNSNameServerIP)
 }
 
 func convertNetworkingV1beta1ToV1(v1beta1Spec HyperConvergedSpec) *hcov1.NetworkingConfig {
@@ -427,16 +426,14 @@ func convertNetworkingV1beta1ToV1(v1beta1Spec HyperConvergedSpec) *hcov1.Network
 	}
 
 	return &hcov1.NetworkingConfig{
-		NetworkBinding:               maps.Clone(v1beta1Spec.NetworkBinding),
-		KubeMacPoolConfiguration:     kubeMacPoolConfig,
-		KubeSecondaryDNSNameServerIP: setPtr(v1beta1Spec.KubeSecondaryDNSNameServerIP),
+		NetworkBinding:           maps.Clone(v1beta1Spec.NetworkBinding),
+		KubeMacPoolConfiguration: kubeMacPoolConfig,
 	}
 }
 
 func areV1beta1NetworkingFieldsEmpty(v1beta1Spec HyperConvergedSpec) bool {
 	return v1beta1Spec.NetworkBinding == nil &&
-		v1beta1Spec.KubeMacPoolConfiguration == nil &&
-		v1beta1Spec.KubeSecondaryDNSNameServerIP == nil
+		v1beta1Spec.KubeMacPoolConfiguration == nil
 }
 
 func convertWorkloadSourcesV1ToV1beta1(v1Config hcov1.WorkloadSourcesConfig, v1beta1Spec *HyperConvergedSpec) {

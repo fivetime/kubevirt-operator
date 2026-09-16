@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"os"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -20,7 +21,6 @@ import (
 	"github.com/kubevirt/hyperconverged-cluster-operator/controllers/handlers/aie"
 	netresinjector "github.com/kubevirt/hyperconverged-cluster-operator/controllers/handlers/netresinjector"
 	observabilitycontroller "github.com/kubevirt/hyperconverged-cluster-operator/controllers/handlers/observabilitycontroller"
-	waspagent "github.com/kubevirt/hyperconverged-cluster-operator/controllers/handlers/wasp-agent"
 	"github.com/kubevirt/hyperconverged-cluster-operator/controllers/operands"
 	"github.com/kubevirt/hyperconverged-cluster-operator/pkg/monitoring/hyperconverged/metrics"
 	hcoutil "github.com/kubevirt/hyperconverged-cluster-operator/pkg/util"
@@ -57,6 +57,7 @@ func NewOperandHandler(client client.Client, scheme *runtime.Scheme, ci hcoutil.
 		handlers.NewCnaHandler(client, scheme),
 		handlers.NewAAQHandler(client, scheme),
 		handlers.NewMigControllerHandler(client, scheme),
+		handlers.NewVMFileRestoreHandler(client, scheme),
 		aie.NewAIEWebhookServiceAccountHandler(client, scheme),
 		aie.NewAIEWebhookServiceHandler(client, scheme),
 		aie.NewAIEWebhookDeploymentHandler(client, scheme),
@@ -73,7 +74,7 @@ func NewOperandHandler(client client.Client, scheme *runtime.Scheme, ci hcoutil.
 		netresinjector.NewMutatingWebhookConfigurationHandler(client, scheme),
 	}
 
-	if ci.IsMonitoringAvailable() {
+	if ci.IsMonitoringAvailable() && os.Getenv(hcoutil.ObservabilityControllerImageEnvV) != "" {
 		operandList = append(operandList, []operands.Operand{
 			observabilitycontroller.NewServiceAccountHandler(client, scheme),
 			observabilitycontroller.NewClusterRoleHandler(client, scheme),
@@ -88,11 +89,6 @@ func NewOperandHandler(client client.Client, scheme *runtime.Scheme, ci hcoutil.
 			handlers.NewCliDownloadHandler(client, scheme),
 			handlers.NewCliDownloadsRouteHandler(client, scheme),
 			operands.NewServiceHandler(client, scheme, handlers.NewCliDownloadsService()),
-			waspagent.NewWaspAgentServiceAccountHandler(client, scheme),
-			waspagent.NewWaspAgentSCCHandler(client, scheme),
-			waspagent.NewWaspAgentDaemonSetHandler(client, scheme),
-			waspagent.NewWaspAgentClusterRoleHandler(client, scheme),
-			waspagent.NewWaspAgentClusterRoleBindingHandler(client, scheme),
 			handlers.NewVirtioWinCmReaderRoleHandler(client, scheme),
 			handlers.NewVirtioWinCmReaderRoleBindingHandler(client, scheme),
 		}...)

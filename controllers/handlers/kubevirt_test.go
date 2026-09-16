@@ -16,7 +16,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -38,8 +37,8 @@ import (
 var _ = Describe("KubeVirt Operand", func() {
 
 	const (
-		// Number of conditional featuregates always added by getFeatureGateChecks (one of the volume hotplug FGs and DecentralizedLiveMigration defaults)
-		conditionalFeatureGatesCount = 3
+		// Number of conditional featuregates always added by getFeatureGateChecks (one of the volume hotplug FGs, DecentralizedLiveMigration, Template, and RebootPolicy defaults)
+		conditionalFeatureGatesCount = 4
 	)
 
 	var (
@@ -350,11 +349,8 @@ Version: 1.2.3`)).To(Succeed())
 			Expect(foundResource.Spec.Configuration.MachineType).To(BeEmpty())
 			Expect(foundResource.Spec.Configuration.ArchitectureConfiguration).ToNot(BeNil())
 			Expect(foundResource.Spec.Configuration.ArchitectureConfiguration.Amd64.MachineType).To(Equal("q35"))
-			Expect(foundResource.Spec.Configuration.ArchitectureConfiguration.Amd64.OVMFPath).To(Equal(DefaultAMD64OVMFPath))
 			Expect(foundResource.Spec.Configuration.ArchitectureConfiguration.Arm64.MachineType).To(Equal("virt"))
-			Expect(foundResource.Spec.Configuration.ArchitectureConfiguration.Arm64.OVMFPath).To(Equal(DefaultARM64OVMFPath))
 			Expect(foundResource.Spec.Configuration.ArchitectureConfiguration.S390x.MachineType).To(Equal("s390-ccw-virtio"))
-			Expect(foundResource.Spec.Configuration.ArchitectureConfiguration.S390x.OVMFPath).To(Equal(DefaultS390xOVMFPath))
 
 			Expect(foundResource.Spec.Configuration.SMBIOSConfig).ToNot(BeNil())
 			Expect(foundResource.Spec.Configuration.SMBIOSConfig.Family).To(Equal("smbios family"))
@@ -562,11 +558,8 @@ Version: 1.2.3`)
 
 			Expect(foundResource.Spec.Configuration.MachineType).To(BeEmpty())
 			Expect(foundResource.Spec.Configuration.ArchitectureConfiguration.Amd64.MachineType).To(Equal("q35"))
-			Expect(foundResource.Spec.Configuration.ArchitectureConfiguration.Amd64.OVMFPath).To(Equal(DefaultAMD64OVMFPath))
 			Expect(foundResource.Spec.Configuration.ArchitectureConfiguration.Arm64.MachineType).To(Equal("virt"))
-			Expect(foundResource.Spec.Configuration.ArchitectureConfiguration.Arm64.OVMFPath).To(Equal(DefaultARM64OVMFPath))
 			Expect(foundResource.Spec.Configuration.ArchitectureConfiguration.S390x.MachineType).To(Equal("s390-ccw-virtio"))
-			Expect(foundResource.Spec.Configuration.ArchitectureConfiguration.S390x.OVMFPath).To(Equal(DefaultS390xOVMFPath))
 
 			Expect(foundResource.Spec.Configuration.SMBIOSConfig).ToNot(BeNil())
 			Expect(foundResource.Spec.Configuration.SMBIOSConfig.Family).To(Equal("smbios family"))
@@ -606,7 +599,7 @@ Version: 1.2.3`)
 
 			Expect(kv.Spec.Configuration.MachineType).To(BeEmpty())
 			Expect(kv.Spec.Configuration.ArchitectureConfiguration.Amd64.MachineType).To(Equal("legacy"))
-			Expect(kv.Spec.Configuration.ArchitectureConfiguration.Amd64.OVMFPath).To(Equal(DefaultAMD64OVMFPath))
+			Expect(kv.Spec.Configuration.ArchitectureConfiguration.Amd64.OVMFPath).To(BeEmpty())
 			Expect(kv.Spec.Configuration.ArchitectureConfiguration.Arm64).To(BeNil())
 			Expect(kv.Spec.Configuration.ArchitectureConfiguration.S390x).To(BeNil())
 		})
@@ -623,7 +616,7 @@ Version: 1.2.3`)
 
 			Expect(kv.Spec.Configuration.MachineType).To(BeEmpty())
 			Expect(kv.Spec.Configuration.ArchitectureConfiguration.Amd64.MachineType).To(Equal("q35"))
-			Expect(kv.Spec.Configuration.ArchitectureConfiguration.Amd64.OVMFPath).To(Equal(DefaultAMD64OVMFPath))
+			Expect(kv.Spec.Configuration.ArchitectureConfiguration.Amd64.OVMFPath).To(BeEmpty())
 			Expect(kv.Spec.Configuration.ArchitectureConfiguration.Arm64).To(BeNil())
 			Expect(kv.Spec.Configuration.ArchitectureConfiguration.S390x).To(BeNil())
 		})
@@ -1998,6 +1991,7 @@ Version: 1.2.3`)
 							And(Not(ContainElement(kvIncrementalBackup)), Not(ContainElement(kvUtilityVolumes))),
 							Not(ContainElement(kvContainerPathVolumes)),
 							ContainElement(kvTemplateFG),
+							ContainElement(kvRebootPolicyFG),
 						),
 						func(kv *kubevirtcorev1.KubeVirt) {
 							Expect(kv.Annotations).ToNot(HaveKey(kubevirtcorev1.EmulatorThreadCompleteToEvenParity))
@@ -2179,6 +2173,23 @@ Version: 1.2.3`)
 							}
 						},
 						Not(ContainElement(kvTemplateFG)),
+					),
+					// RebootPolicy
+					Entry("should add the RebootPolicy feature gate if rebootPolicy is true in HyperConverged CR",
+						func(hc *hcov1.HyperConverged) {
+							hc.Spec.FeatureGates = featuregates.HyperConvergedFeatureGates{
+								{Name: "rebootPolicy", State: new(featuregates.Enabled)},
+							}
+						},
+						ContainElement(kvRebootPolicyFG),
+					),
+					Entry("should not add the RebootPolicy feature gate if rebootPolicy is false in HyperConverged CR",
+						func(hc *hcov1.HyperConverged) {
+							hc.Spec.FeatureGates = featuregates.HyperConvergedFeatureGates{
+								{Name: "rebootPolicy", State: new(featuregates.Disabled)},
+							}
+						},
+						Not(ContainElement(kvRebootPolicyFG)),
 					),
 				)
 			})
@@ -2510,42 +2521,6 @@ Version: 1.2.3`)
 					disabled := getKvDisabledFeatureGateList(fgs)
 					Expect(disabled).To(ContainElement(kvPasstBinding))
 				})
-
-				DescribeTable("should enable ExternalNetResourceInjection FG", func(deploy *bool) {
-					hco.Spec.Deployment.DeployNetworkResourcesInjector = deploy
-					apimeta.SetStatusCondition(&hco.Status.Conditions, metav1.Condition{
-						Type:   hcov1.ConditionNetworkResourcesInjectorReady,
-						Status: metav1.ConditionTrue,
-						Reason: "DeploymentReady",
-					})
-					mandatoryKvFeatureGates = getMandatoryKvFeatureGates(false)
-					fgs := getKvFeatureGateList(hco)
-					disabled := getKvDisabledFeatureGateList(fgs)
-					Expect(disabled).NotTo(ContainElement(kvExternalNetResourceInjection))
-				},
-					Entry("when enabled=true and ready=true", new(true)),
-					Entry("when enabled=nil (default) and ready=true", (*bool)(nil)),
-				)
-
-				DescribeTable("should disable ExternalNetResourceInjection FG", func(deploy *bool, conditionTrue bool) {
-					hco.Spec.Deployment.DeployNetworkResourcesInjector = deploy
-					if conditionTrue {
-						apimeta.SetStatusCondition(&hco.Status.Conditions, metav1.Condition{
-							Type:   hcov1.ConditionNetworkResourcesInjectorReady,
-							Status: metav1.ConditionTrue,
-							Reason: "DeploymentReady",
-						})
-					}
-					mandatoryKvFeatureGates = getMandatoryKvFeatureGates(false)
-					fgs := getKvFeatureGateList(hco)
-					disabled := getKvDisabledFeatureGateList(fgs)
-					Expect(disabled).To(ContainElement(kvExternalNetResourceInjection))
-				},
-					Entry("when enabled=true and ready=false", new(true), false),
-					Entry("when enabled=false and ready=true", new(false), true),
-					Entry("when enabled=false and ready=false", new(false), false),
-					Entry("when enabled=nil (default) and ready=false", (*bool)(nil), false),
-				)
 
 				It("should include all beta FG if not in the enabled list", func() {
 					mandatoryKvFeatureGates = getMandatoryKvFeatureGates(false)
@@ -3255,6 +3230,123 @@ Version: 1.2.3`)
 
 		})
 
+		Context("HyperShift replicas", func() {
+			BeforeEach(func() {
+				commontestutils.HighlyAvailableNodeInfoMocks()
+
+				DeferCleanup(func() {
+					commontestutils.ResetNodeInfoMocks()
+				})
+			})
+
+			Context("Custom Infra placement, default Workloads placement", func() {
+				BeforeEach(func() {
+					commontestutils.SetNodeCustomPlacement(hco, commontestutils.NewNodePlacement(), nil)
+				})
+
+				It("should not force replica=1 on HyperShift HA (2+ workers, no CP nodes)", func() {
+					commontestutils.HyperShiftHANodeInfoMock()
+
+					kv, err := NewKubeVirt(hco)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(kv.Spec.Infra).ToNot(BeNil())
+					Expect(kv.Spec.Infra.Replicas).To(BeNil())
+					Expect(kv.Spec.Workloads).To(BeNil())
+				})
+
+				It("should set replica=1 on HyperShift single worker", func() {
+					commontestutils.HyperShiftSingleWorkerNodeInfoMock()
+
+					kv, err := NewKubeVirt(hco)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(kv.Spec.Infra).ToNot(BeNil())
+					Expect(kv.Spec.Infra.Replicas).To(HaveValue(Equal(uint8(1))))
+					Expect(kv.Spec.Workloads).To(BeNil())
+				})
+			})
+
+			Context("Custom Workloads placement, default Infra placement", func() {
+				BeforeEach(func() {
+					commontestutils.SetNodeCustomPlacement(hco, nil, commontestutils.NewNodePlacement())
+				})
+
+				It("should not force replica=1 on HyperShift HA (2+ workers, no CP nodes)", func() {
+					commontestutils.HyperShiftHANodeInfoMock()
+
+					kv, err := NewKubeVirt(hco)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(kv.Spec.Infra).ToNot(BeNil())
+					Expect(kv.Spec.Infra.Replicas).To(BeNil())
+					Expect(kv.Spec.Infra.NodePlacement).ToNot(BeNil())
+					Expect(kv.Spec.Workloads).ToNot(BeNil())
+					Expect(kv.Spec.Workloads.Replicas).To(BeNil())
+				})
+
+				It("should set replica=1 on HyperShift single worker", func() {
+					commontestutils.HyperShiftSingleWorkerNodeInfoMock()
+
+					kv, err := NewKubeVirt(hco)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(kv.Spec.Infra).ToNot(BeNil())
+					Expect(kv.Spec.Infra.Replicas).To(HaveValue(Equal(uint8(1))))
+					Expect(kv.Spec.Workloads).ToNot(BeNil())
+					Expect(kv.Spec.Workloads.Replicas).To(BeNil())
+				})
+			})
+
+			Context("Default Infra and Workload placement", func() {
+				It("should not force replica=1 on HyperShift HA (2+ workers, no CP nodes)", func() {
+					commontestutils.HyperShiftHANodeInfoMock()
+
+					kv, err := NewKubeVirt(hco)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(kv.Spec.Infra).ToNot(BeNil())
+					Expect(kv.Spec.Infra.Replicas).To(BeNil())
+					Expect(kv.Spec.Infra.NodePlacement).ToNot(BeNil())
+					Expect(kv.Spec.Workloads).To(BeNil())
+				})
+
+				It("should set replica=1 on HyperShift single worker", func() {
+					commontestutils.HyperShiftSingleWorkerNodeInfoMock()
+
+					kv, err := NewKubeVirt(hco)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(kv.Spec.Infra).ToNot(BeNil())
+					Expect(kv.Spec.Infra.Replicas).To(HaveValue(Equal(uint8(1))))
+					Expect(kv.Spec.Infra.NodePlacement).ToNot(BeNil())
+					Expect(kv.Spec.Workloads).To(BeNil())
+				})
+			})
+
+			Context("Custom Infra and Workloads placement", func() {
+				BeforeEach(func() {
+					commontestutils.SetNodePlacement(hco)
+				})
+
+				It("should not force replica=1 on HyperShift HA (2+ workers, no CP nodes)", func() {
+					commontestutils.HyperShiftHANodeInfoMock()
+
+					kv, err := NewKubeVirt(hco)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(kv.Spec.Infra).ToNot(BeNil())
+					Expect(kv.Spec.Infra.Replicas).To(BeNil())
+					Expect(kv.Spec.Workloads).ToNot(BeNil())
+					Expect(kv.Spec.Workloads.Replicas).To(BeNil())
+				})
+
+				It("should set replica=1 on HyperShift single worker", func() {
+					commontestutils.HyperShiftSingleWorkerNodeInfoMock()
+
+					kv, err := NewKubeVirt(hco)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(kv.Spec.Infra).ToNot(BeNil())
+					Expect(kv.Spec.Infra.Replicas).To(HaveValue(Equal(uint8(1))))
+					Expect(kv.Spec.Workloads).ToNot(BeNil())
+					Expect(kv.Spec.Workloads.Replicas).To(BeNil())
+				})
+			})
+		})
+
 		Context("Cluster level EvictionStrategy", func() {
 			It("should add eviction strategy if missing in KV", func() {
 				existingResource, err := NewKubeVirt(hco)
@@ -3380,28 +3472,6 @@ Version: 1.2.3`)
 				Expect(kv.Spec.Configuration.RoleAggregationStrategy).To(BeNil())
 				Expect(kv.Spec.Configuration.DeveloperConfiguration.FeatureGates).ToNot(ContainElement(kvOptOutRoleAggregation))
 			})
-		})
-
-		Context("DeployNetworkResourcesInjector", func() {
-			It("should add ExternalNetResourceInjection FG when NetResInj is ready", func() {
-				apimeta.SetStatusCondition(&hco.Status.Conditions, metav1.Condition{
-					Type:   hcov1.ConditionNetworkResourcesInjectorReady,
-					Status: metav1.ConditionTrue,
-					Reason: "DeploymentReady",
-				})
-				kv, err := NewKubeVirt(hco)
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(kv.Spec.Configuration.DeveloperConfiguration.FeatureGates).To(ContainElement(kvExternalNetResourceInjection))
-			})
-
-			It("should not add ExternalNetResourceInjection FG when NetResInj not ready", func() {
-				kv, err := NewKubeVirt(hco)
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(kv.Spec.Configuration.DeveloperConfiguration.FeatureGates).ToNot(ContainElement(kvExternalNetResourceInjection))
-			})
-
 		})
 
 		Context("VM state storage class", func() {

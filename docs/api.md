@@ -1,6 +1,6 @@
-# API Docs
+# v1 API Documentation
 
-This Document documents the types introduced by the hyperconverged-cluster-operator to be consumed by users.
+This Document documents the `v1` API version's types introduced by the hyperconverged-cluster-operator, to be consumed by users.
 
 > Note this document is generated from code comments. When contributing a change to this document please do so by changing the code comments.
 
@@ -293,7 +293,7 @@ NetworkingConfig contains all the networking configurations
 
 | Field | Description | Scheme | Default | Required |
 | ----- | ----------- | ------ | ------- | -------- |
-| kubeSecondaryDNSNameServerIP | KubeSecondaryDNSNameServerIP defines name server IP used by KubeSecondaryDNS | *string |  | false |
+| kubeSecondaryDNSNameServerIP | Deprecated: This field is ignored. | *string |  | false |
 | kubeMacPoolConfiguration | KubeMacPoolConfiguration holds kubemacpool MAC address range configuration. | *[KubeMacPoolConfig](#kubemacpoolconfig) |  | false |
 | networkBinding | NetworkBinding defines the network binding plugins. Those bindings can be used when defining virtual machine interfaces. | map[string]v1.InterfaceBindingPlugin |  | false |
 
@@ -307,6 +307,7 @@ NodeInfoStatus holds information about the cluster nodes
 | ----- | ----------- | ------ | ------- | -------- |
 | workloadsArchitectures | WorkloadsArchitectures is a distinct list of the CPU architectures of the workloads nodes in the cluster. | []string |  | false |
 | controlPlaneArchitectures | ControlPlaneArchitectures is a distinct list of the CPU architecture of the control-plane nodes. | []string |  | false |
+| defaultWorkloadArchitecture | DefaultWorkloadArchitecture is chosen automatically by HCO. This field reports the architecture selected by HCO. | string |  | false |
 
 [Back to TOC](#table-of-contents)
 
@@ -532,10 +533,10 @@ A feature gate may be in the following phases:
 | ---- | ----------- | ----- |
 | decentralizedLiveMigration | DecentralizedLiveMigration enables the decentralized live migration (cross-cluster migration) feature. This feature allows live migration of VirtualMachineInstances between different clusters. This feature is in Tech Preview. | beta |
 | declarativeHotplugVolumes | DeclarativeHotplugVolumes enables the use of the declarative volume hotplug feature in KubeVirt. When set to true or nil, the "DeclarativeHotplugVolumes" feature gate is enabled and the "HotplugVolumes" feature gate is not (default behavior). When set to false, the "HotplugVolumes" featuregate is enabled in KubeVirt. This feature is in Technical Preview. | beta |
+| rebootPolicy | RebootPolicy enables virtual machines to be recreated when they reboot from within the guest operating system. This feature is in Tech Preview. | beta |
 | template | VirtualMachine Templates provide a native, in-cluster VM templating for KubeVirt. They allow you to define reusable VM blueprints with parameterized values that can be processed to create virtual machine. the "template" feature gate enables this feature. Note: this feature is in Tech Preview. | beta |
 | alignCPUs | Enable KubeVirt to request up to two additional dedicated CPUs in order to complete the total CPU count to an even parity when using emulator thread isolation. Note: this feature is in Developer Preview. | alpha |
 | containerPathVolumes | ContainerPathVolumes enables the use of container paths as volumes in KubeVirt. This allows VMs to access files and directories from the virt-launcher pod's filesystem via virtiofs. | alpha |
-| deployKubeSecondaryDNS | Deploy KubeSecondaryDNS by CNAO | alpha |
 | deployObservabilityController | Deploy the virt-observability-controller component. When enabled, the controller exposes KubeVirt metrics and manages PrometheusRule resources independently from the KubeVirt control plane. | alpha |
 | downwardMetrics | Allow to expose a limited set of host metrics to guests. | alpha |
 | incrementalBackup | IncrementalBackup enables changed block tracking backups and incremental backups using QEMU capabilities in KubeVirt. When enabled, this also enables the UtilityVolumes feature gate in the KubeVirt CR. Note: This feature is in Developer Preview. | alpha |

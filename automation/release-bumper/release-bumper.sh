@@ -90,16 +90,16 @@ function get_current_versions {
     ["MIGRATION_CONTROLLER"]=""
     ["VIRT_TEMPLATE"]=""
     ["AUTOPILOT"]=""
+    ["KUBEVIRT_METRICS_EXPORTER"]=""
     ["VM_FILE_RESTORE_OPERATOR"]=""
     ["AIE_WEBHOOK"]=""
     ["INFLIGHT_OPERATIONS"]=""
     ["KUBEVIRT_CONSOLE_PLUGIN"]=""
     ["KUBEVIRT_CONSOLE_PROXY"]=""
     ["NODE_DRIVER_REG"]=""
-    ["LIVENESS_PROBE"]=""
+#    ["LIVENESS_PROBE"]=""
     ["CSI_SNAPSHOT"]=""
     ["CSI_SIG_STORAGE"]=""
-    ["WASP_AGENT"]=""
     ["OBSERVABILITY_CONTROLLER"]=""
   )
 
@@ -121,16 +121,16 @@ function get_updated_versions {
     ["MIGRATION_CONTROLLER"]="kubevirt/kubevirt-migration-controller"
     ["VIRT_TEMPLATE"]="kubevirt/virt-template"
     ["AUTOPILOT"]="openshift-virtualization/virt-platform-autopilot"
+    ["KUBEVIRT_METRICS_EXPORTER"]="openshift-virtualization/kubevirt-metrics-exporter"
     ["VM_FILE_RESTORE_OPERATOR"]="kubevirt/vm-file-restore-operator"
     ["AIE_WEBHOOK"]="kubevirt/kubevirt-aie-webhook"
     ["INFLIGHT_OPERATIONS"]="openshift-virtualization/inflightoperations"
     ["KUBEVIRT_CONSOLE_PLUGIN"]="kubevirt-ui/kubevirt-plugin"
     ["KUBEVIRT_CONSOLE_PROXY"]="kubevirt-ui/kubevirt-apiserver-proxy"
     ["NODE_DRIVER_REG"]="kubernetes-csi/node-driver-registrar"
-    ["LIVENESS_PROBE"]="kubernetes-csi/livenessprobe"
+#    ["LIVENESS_PROBE"]="kubernetes-csi/livenessprobe"
     ["CSI_SNAPSHOT"]="kubernetes-csi/external-snapshotter"
     ["CSI_SIG_STORAGE"]="kubernetes-csi/external-provisioner"
-    ["WASP_AGENT"]="openshift-virtualization/wasp-agent"
     ["OBSERVABILITY_CONTROLLER"]="kubevirt/kubevirt-observability-controller"
   )
 
@@ -141,6 +141,7 @@ function get_updated_versions {
     ["SSP"]="kubevirt.io/ssp-operator/api"
     ["AAQ"]="kubevirt.io/application-aware-quota"
     ["MIGRATION_OPERATOR"]="kubevirt.io/kubevirt-migration-operator"
+    ["VM_FILE_RESTORE_OPERATOR"]="kubevirt.io/vm-file-restore-operator"
   )
 
   UPDATED_VERSIONS=()

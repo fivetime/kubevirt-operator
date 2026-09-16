@@ -17,7 +17,6 @@ import (
 	"github.com/openshift/library-go/pkg/crypto"
 	corev1 "k8s.io/api/core/v1"
 	schedulingv1 "k8s.io/api/scheduling/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -52,9 +51,6 @@ const (
 )
 
 const (
-	DefaultAMD64OVMFPath             = "/usr/share/OVMF"
-	DefaultARM64OVMFPath             = "/usr/share/AAVMF"
-	DefaultS390xOVMFPath             = ""
 	DefaultAMD64EmulatedQ35Machine   = "q35*"
 	DefaultAMD64EmulatedPCQ35Machine = "pc-q35*"
 	DefaultARM64EmulatedMachines     = "virt*"
@@ -133,21 +129,21 @@ const (
 
 // KubeVirt feature gates that are exposed in HCO API
 const (
-	kvDownwardMetrics              = "DownwardMetrics"
-	kvAlignCPUs                    = "AlignCPUs"
-	kvDecentralizedLiveMigration   = "DecentralizedLiveMigration"
-	kvObjectGraph                  = "ObjectGraph"
-	kvUtilityVolumes               = "UtilityVolumes"
-	kvIncrementalBackup            = "IncrementalBackup"
-	kvPasstBinding                 = "PasstBinding"
-	kvConfigurableHypervisor       = "ConfigurableHypervisor"
-	kvOptOutRoleAggregation        = "OptOutRoleAggregation"
-	kvContainerPathVolumes         = "ContainerPathVolumes"
-	kvPCINUMAAwareTopology         = "PCINUMAAwareTopology"
-	kvGraceIOVirtualization        = "GraceIOVirtualization"
-	kvIOMMUFD                      = "IOMMUFD"
-	kvTemplateFG                   = "Template"
-	kvExternalNetResourceInjection = "ExternalNetResourceInjection"
+	kvDownwardMetrics            = "DownwardMetrics"
+	kvAlignCPUs                  = "AlignCPUs"
+	kvDecentralizedLiveMigration = "DecentralizedLiveMigration"
+	kvObjectGraph                = "ObjectGraph"
+	kvUtilityVolumes             = "UtilityVolumes"
+	kvIncrementalBackup          = "IncrementalBackup"
+	kvPasstBinding               = "PasstBinding"
+	kvConfigurableHypervisor     = "ConfigurableHypervisor"
+	kvOptOutRoleAggregation      = "OptOutRoleAggregation"
+	kvContainerPathVolumes       = "ContainerPathVolumes"
+	kvPCINUMAAwareTopology       = "PCINUMAAwareTopology"
+	kvGraceIOVirtualization      = "GraceIOVirtualization"
+	kvIOMMUFD                    = "IOMMUFD"
+	kvTemplateFG                 = "Template"
+	kvRebootPolicyFG             = "RebootPolicy"
 )
 
 // CPU Plugin default values
@@ -443,7 +439,7 @@ func getKVConfig(hc *hcov1.HyperConverged) (*kubevirtcorev1.KubeVirtConfiguratio
 		EvictionStrategy:                   hc.Spec.Virtualization.EvictionStrategy,
 		KSMConfiguration:                   hc.Spec.Virtualization.KSMConfiguration,
 		ChangedBlockTrackingLabelSelectors: hc.Spec.Virtualization.ChangedBlockTrackingLabelSelectors,
-		VMRolloutStrategy:                  ptr.To(kubevirtcorev1.VMRolloutStrategyLiveUpdate),
+		VMRolloutStrategy:                  new(kubevirtcorev1.VMRolloutStrategyLiveUpdate),
 		LiveUpdateConfiguration:            hc.Spec.Virtualization.LiveUpdateConfiguration,
 		ArchitectureConfiguration:          getArchConfiguration(),
 	}
@@ -559,7 +555,6 @@ func getAMD64ArchConfig() *kubevirtcorev1.ArchSpecificConfiguration {
 
 	return &kubevirtcorev1.ArchSpecificConfiguration{
 		MachineType: amd64MachineType,
-		OVMFPath:    DefaultAMD64OVMFPath,
 		EmulatedMachines: []string{
 			DefaultAMD64EmulatedQ35Machine,
 			DefaultAMD64EmulatedPCQ35Machine,
@@ -575,7 +570,6 @@ func getARM64ArchConfig() *kubevirtcorev1.ArchSpecificConfiguration {
 
 	return &kubevirtcorev1.ArchSpecificConfiguration{
 		MachineType:      armMachineType,
-		OVMFPath:         DefaultARM64OVMFPath,
 		EmulatedMachines: []string{DefaultARM64EmulatedMachines},
 	}
 }
@@ -588,7 +582,6 @@ func getS390xArchConfig() *kubevirtcorev1.ArchSpecificConfiguration {
 
 	return &kubevirtcorev1.ArchSpecificConfiguration{
 		MachineType:      s390xMachineType,
-		OVMFPath:         DefaultS390xOVMFPath,
 		EmulatedMachines: []string{DefaultS390XEmulatedMachines},
 	}
 }
@@ -872,7 +865,7 @@ func getKVSeccompConfig() *kubevirtcorev1.SeccompConfiguration {
 	return &kubevirtcorev1.SeccompConfiguration{
 		VirtualMachineInstanceProfile: &kubevirtcorev1.VirtualMachineInstanceProfile{
 			CustomProfile: &kubevirtcorev1.CustomProfile{
-				LocalhostProfile: ptr.To("kubevirt/kubevirt.json"),
+				LocalhostProfile: new("kubevirt/kubevirt.json"),
 			},
 		},
 	}
@@ -896,21 +889,16 @@ func hcoConfig2KvConfig(
 
 	kvConfig := &kubevirtcorev1.ComponentConfig{}
 
+	if shouldHaveVirtInfraSingleReplica(infraHighlyAvailable, controlPlaneMultiNode, controlPlaneNodeExists) {
+		kvConfig.Replicas = new(uint8(1))
+	}
+
 	// In case there are no control plane / master nodes in the cluster, we're setting
 	// an empty struct for NodePlacement so that kubevirt control plane pods won't have
 	// any affinity rules, and they could get scheduled onto worker nodes.
 	if nodePlacement == nil && !controlPlaneNodeExists {
 		kvConfig.NodePlacement = &kubevirtcorev1.NodePlacement{}
-		if !infraHighlyAvailable {
-			// if there is only one worker node and no control plane nodes,
-			// set the kubevirt control plane replica count to 1.
-			kvConfig.Replicas = ptr.To[uint8](1)
-		}
 		return kvConfig
-	}
-
-	if !controlPlaneMultiNode {
-		kvConfig.Replicas = new(uint8(1))
 	}
 
 	if nodePlacement == nil {
@@ -935,6 +923,10 @@ func hcoConfig2KvConfig(
 	}
 
 	return kvConfig
+}
+
+func shouldHaveVirtInfraSingleReplica(infraHighlyAvailable, controlPlaneMultiNode, controlPlaneNodeExists bool) bool {
+	return (controlPlaneNodeExists && !controlPlaneMultiNode) || (!controlPlaneNodeExists && !infraHighlyAvailable)
 }
 
 func getFeatureGateChecks(hc *hcov1.HyperConverged) []string {
@@ -997,9 +989,8 @@ func getFeatureGateChecks(hc *hcov1.HyperConverged) []string {
 		fgs = append(fgs, kvTemplateFG)
 	}
 
-	if common.ShouldDeployNetworkResourcesInjector(hc) &&
-		meta.IsStatusConditionTrue(hc.Status.Conditions, hcov1.ConditionNetworkResourcesInjectorReady) {
-		fgs = append(fgs, kvExternalNetResourceInjection)
+	if featureGates.IsEnabled(kvRebootPolicyFG) {
+		fgs = append(fgs, kvRebootPolicyFG)
 	}
 
 	return fgs

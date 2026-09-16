@@ -1064,6 +1064,19 @@ rules:
   - delete
   - patch
 - apiGroups:
+  - filerestore.kubevirt.io
+  resources:
+  - filerestoreoperators
+  - filerestoreoperators/finalizers
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - delete
+  - patch
+- apiGroups:
   - ""
   resources:
   - configmaps
@@ -2471,12 +2484,6 @@ rules:
   - watch
   - get
 - apiGroups:
-  - k8s.cni.cncf.io
-  resources:
-  - network-attachment-definitions
-  verbs:
-  - get
-- apiGroups:
   - kubevirt.io
   resources:
   - virtualmachineinstances
@@ -2672,6 +2679,7 @@ rules:
   - virtualmachines/addvolume
   - virtualmachines/removevolume
   - virtualmachines/memorydump
+  - virtualmachines/removememorydump
   - virtualmachines/evacuate/cancel
   verbs:
   - update
@@ -2858,6 +2866,7 @@ rules:
   - virtualmachines/addvolume
   - virtualmachines/removevolume
   - virtualmachines/memorydump
+  - virtualmachines/removememorydump
   - virtualmachines/evacuate/cancel
   verbs:
   - update
@@ -3119,6 +3128,12 @@ rules:
   - list
   - watch
   - deletecollection
+- apiGroups:
+  - k8s.cni.cncf.io
+  resources:
+  - network-attachment-definitions
+  verbs:
+  - get
 - apiGroups:
   - authentication.k8s.io
   resources:
@@ -4464,6 +4479,7 @@ rules:
   - patch
   - update
   - watch
+  - deletecollection
 - apiGroups:
   - migrations.kubevirt.io
   resources:
@@ -4860,6 +4876,65 @@ rules:
   - list
   - watch
 - apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+- apiGroups:
+  - cdi.kubevirt.io
+  resources:
+  - storageprofiles
+  verbs:
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - kubevirt.io
+  resources:
+  - virtualmachineinstances
+  verbs:
+  - get
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - kubevirt-metrics-exporter
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  - serviceaccounts
+  - services
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - daemonsets
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - forklift.konveyor.io
   resources:
   - forkliftcontrollers
@@ -4893,6 +4968,17 @@ rules:
   - update
   - watch
 - apiGroups:
+  - loki.grafana.com
+  resources:
+  - lokistacks
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - machineconfiguration.openshift.io
   resources:
   - kubeletconfigs
@@ -4918,7 +5004,9 @@ rules:
 - apiGroups:
   - monitoring.coreos.com
   resources:
+  - podmonitors
   - prometheusrules
+  - servicemonitors
   verbs:
   - create
   - get
@@ -4929,9 +5017,11 @@ rules:
 - apiGroups:
   - observability.openshift.io
   resources:
+  - clusterlogforwarders
   - uiplugins
   verbs:
   - create
+  - delete
   - get
   - list
   - patch
@@ -4949,9 +5039,93 @@ rules:
   - update
   - watch
 - apiGroups:
+  - perses.dev
+  resources:
+  - persesdashboards
+  - persesdatasources
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterrolebindings
+  verbs:
+  - create
+  - list
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - kubevirt-metrics-exporter
+  - kubevirt-metrics-exporter-scc
+  - logging-collector-application
+  - logging-collector-audit
+  - logging-collector-infrastructure
+  - logging-collector-logs-writer
+  resources:
+  - clusterrolebindings
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterroles
+  verbs:
+  - create
+  - list
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - kubevirt-metrics-exporter
+  - kubevirt-metrics-exporter-scc
+  resources:
+  - clusterroles
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - remediation.medik8s.io
   resources:
   - nodehealthchecks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - security.openshift.io
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - create
+  - list
+  - watch
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - kubevirt-metrics-exporter
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - storage-based-remediation.medik8s.io
+  resources:
+  - storagebasedremediationconfigs
   verbs:
   - create
   - get

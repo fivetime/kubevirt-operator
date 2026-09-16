@@ -76,6 +76,11 @@ type HyperConvergedSpec struct {
 	//   feature is in Technical Preview.
 	//   Phase: beta
 	//
+	// * rebootPolicy:
+	//   RebootPolicy enables virtual machines to be recreated when they reboot
+	//   from within the guest operating system. This feature is in Tech Preview.
+	//   Phase: beta
+	//
 	// * template:
 	//   VirtualMachine Templates provide a native, in-cluster VM templating for
 	//   KubeVirt. They allow you to define reusable VM blueprints with
@@ -94,10 +99,6 @@ type HyperConvergedSpec struct {
 	//   ContainerPathVolumes enables the use of container paths as volumes in
 	//   KubeVirt. This allows VMs to access files and directories from the
 	//   virt-launcher pod's filesystem via virtiofs.
-	//   Phase: alpha
-	//
-	// * deployKubeSecondaryDNS:
-	//   Deploy KubeSecondaryDNS by CNAO
 	//   Phase: alpha
 	//
 	// * deployObservabilityController:
@@ -379,7 +380,7 @@ type PersistentReservationConfiguration struct {
 
 // NetworkingConfig contains all the networking configurations
 type NetworkingConfig struct {
-	// KubeSecondaryDNSNameServerIP defines name server IP used by KubeSecondaryDNS
+	// Deprecated: This field is ignored.
 	// +optional
 	KubeSecondaryDNSNameServerIP *string `json:"kubeSecondaryDNSNameServerIP,omitempty"`
 
@@ -925,6 +926,9 @@ type NodeInfoStatus struct {
 	WorkloadsArchitectures []string `json:"workloadsArchitectures,omitempty"`
 	// ControlPlaneArchitectures is a distinct list of the CPU architecture of the control-plane nodes.
 	ControlPlaneArchitectures []string `json:"controlPlaneArchitectures,omitempty"`
+
+	// DefaultWorkloadArchitecture is chosen automatically by HCO. This field reports the architecture selected by HCO.
+	DefaultWorkloadArchitecture string `json:"defaultWorkloadArchitecture,omitempty"`
 }
 
 // ApplicationAwareConfigurations holds the AAQ configurations

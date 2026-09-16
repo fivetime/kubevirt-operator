@@ -39,6 +39,7 @@ import (
 	"github.com/kubevirt/hyperconverged-cluster-operator/controllers/handlers"
 	"github.com/kubevirt/hyperconverged-cluster-operator/controllers/reqresolver"
 	"github.com/kubevirt/hyperconverged-cluster-operator/pkg/monitoring/hyperconverged/metrics"
+	"github.com/kubevirt/hyperconverged-cluster-operator/pkg/nodeinfo"
 	fakeownresources "github.com/kubevirt/hyperconverged-cluster-operator/pkg/ownresources/fake"
 	"github.com/kubevirt/hyperconverged-cluster-operator/pkg/tlssecprofile"
 	hcoutil "github.com/kubevirt/hyperconverged-cluster-operator/pkg/util"
@@ -212,6 +213,7 @@ var _ = Describe("HyperconvergedController", func() {
 					"KubevirtSeccompProfile",
 					"DecentralizedLiveMigration",
 					"Template",
+					"RebootPolicy",
 				}
 				// Get the KV
 				kvList := &kubevirtcorev1.KubeVirtList{}
@@ -243,7 +245,7 @@ var _ = Describe("HyperconvergedController", func() {
 						foundResource),
 				).ToNot(HaveOccurred())
 				// Check conditions
-				Expect(foundResource.Status.RelatedObjects).To(HaveLen(39))
+				Expect(foundResource.Status.RelatedObjects).To(HaveLen(40))
 				expectedRef := corev1.ObjectReference{
 					Kind:            "PrometheusRule",
 					Namespace:       namespace,
@@ -308,7 +310,7 @@ var _ = Describe("HyperconvergedController", func() {
 
 				verifySystemHealthStatusError(foundResource)
 
-				Expect(foundResource.Status.RelatedObjects).To(HaveLen(23))
+				Expect(foundResource.Status.RelatedObjects).To(HaveLen(24))
 				expectedRef := corev1.ObjectReference{
 					Kind:            "PrometheusRule",
 					Namespace:       namespace,
@@ -810,7 +812,7 @@ var _ = Describe("HyperconvergedController", func() {
 				).To(Succeed())
 
 				Expect(foundResource.Status.RelatedObjects).ToNot(BeNil())
-				Expect(foundResource.Status.RelatedObjects).To(HaveLen(23))
+				Expect(foundResource.Status.RelatedObjects).To(HaveLen(24))
 				Expect(foundResource.Finalizers).To(Equal([]string{FinalizerName}))
 
 				hco := &hcov1.HyperConverged{
@@ -989,55 +991,6 @@ var _ = Describe("HyperconvergedController", func() {
 				Expect(cond).ToNot(BeNil())
 				Expect(cond.Status).To(Equal(metav1.ConditionFalse))
 				Expect(cond.Reason).To(Equal("DeploymentNotReady"))
-			})
-
-			It("should set NetworkResourcesInjectorReady condition to True and enable ExternalNetResourceInjection FG when deployment is ready", func() {
-				expected := getBasicDeployment()
-				cl := expected.initClient()
-
-				_, r, _ := doReconcile(cl, expected.hco, nil)
-
-				dep := &appsv1.Deployment{}
-				Expect(cl.Get(context.TODO(), types.NamespacedName{
-					Name:      "virt-network-resources-injector",
-					Namespace: namespace,
-				}, dep)).To(Succeed())
-				dep.Status.ReadyReplicas = *dep.Spec.Replicas
-				dep.Status.Replicas = *dep.Spec.Replicas
-				Expect(cl.Status().Update(context.TODO(), dep)).To(Succeed())
-
-				// KV is reconciled before NRI, so the first reconcile updates the
-				// condition to True but KV still sees the old value.
-				foundResource, r, _ := doReconcile(cl, expected.hco, r)
-
-				cond := apimetav1.FindStatusCondition(foundResource.Status.Conditions, hcov1.ConditionNetworkResourcesInjectorReady)
-				Expect(cond).ToNot(BeNil())
-				Expect(cond.Status).To(Equal(metav1.ConditionTrue))
-				Expect(cond.Reason).To(Equal("DeploymentReady"))
-
-				// Second reconcile: KV now sees condition=True and enables the FG.
-				_, _, _ = doReconcile(cl, expected.hco, r)
-
-				kvList := &kubevirtcorev1.KubeVirtList{}
-				Expect(cl.List(context.TODO(), kvList)).To(Succeed())
-				Expect(kvList.Items).To(HaveLen(1))
-				Expect(kvList.Items[0].Spec.Configuration.DeveloperConfiguration.FeatureGates).To(ContainElement("ExternalNetResourceInjection"))
-			})
-
-			It("should remove NetworkResourcesInjectorReady condition and not enable ExternalNetResourceInjection FG when deployment is disabled", func() {
-				expected := getBasicDeployment()
-				expected.hco.Spec.Deployment.DeployNetworkResourcesInjector = new(false)
-				cl := expected.initClient()
-
-				foundResource, _, _ := doReconcile(cl, expected.hco, nil)
-
-				cond := apimetav1.FindStatusCondition(foundResource.Status.Conditions, hcov1.ConditionNetworkResourcesInjectorReady)
-				Expect(cond).To(BeNil())
-
-				kvList := &kubevirtcorev1.KubeVirtList{}
-				Expect(cl.List(context.TODO(), kvList)).To(Succeed())
-				Expect(kvList.Items).To(HaveLen(1))
-				Expect(kvList.Items[0].Spec.Configuration.DeveloperConfiguration.FeatureGates).ToNot(ContainElement("ExternalNetResourceInjection"))
 			})
 		})
 
@@ -2615,6 +2568,60 @@ var _ = Describe("HyperconvergedController", func() {
 						Expect(*ssp.Spec.TemplateValidator.Replicas).To(Equal(int32(5)))
 					})
 				})
+			})
+		})
+
+		Context("nodeInfo status", func() {
+			AfterEach(func() {
+				commontestutils.ResetNodeInfoMocks()
+			})
+
+			It("should report the control plane architectures in the status", func(ctx context.Context) {
+				arches := []string{"aaa", "bbb", "ccc"}
+				nodeinfo.GetControlPlaneArchitectures = func() []string {
+					return arches
+				}
+
+				hco := commontestutils.NewHco()
+				hco.Status.NodeInfo.ControlPlaneArchitectures = []string{"something", "else"}
+				cl := commontestutils.InitClient([]client.Object{hco})
+				r := initReconciler(cl, nil)
+
+				newHCO, _, _ := doReconcile(cl, hco, r)
+
+				Expect(newHCO.Status.NodeInfo.ControlPlaneArchitectures).To(Equal(arches))
+			})
+
+			It("should report the workload architectures in the status", func(ctx context.Context) {
+				arches := []string{"aaa", "bbb", "ccc"}
+				nodeinfo.GetWorkloadsArchitectures = func() []string {
+					return arches
+				}
+
+				hco := commontestutils.NewHco()
+				hco.Status.NodeInfo.WorkloadsArchitectures = []string{"something", "else"}
+				cl := commontestutils.InitClient([]client.Object{hco})
+				r := initReconciler(cl, nil)
+
+				newHCO, _, _ := doReconcile(cl, hco, r)
+
+				Expect(newHCO.Status.NodeInfo.WorkloadsArchitectures).To(Equal(arches))
+			})
+
+			It("should report the default workload architecture in the status", func(ctx context.Context) {
+				const defaultArch = "defaultArch"
+				nodeinfo.GetDefaultArchitecture = func() string {
+					return defaultArch
+				}
+
+				hco := commontestutils.NewHco()
+				hco.Status.NodeInfo.DefaultWorkloadArchitecture = "something-else"
+				cl := commontestutils.InitClient([]client.Object{hco})
+				r := initReconciler(cl, nil)
+
+				newHCO, _, _ := doReconcile(cl, hco, r)
+
+				Expect(newHCO.Status.NodeInfo.DefaultWorkloadArchitecture).To(Equal(defaultArch))
 			})
 		})
 	})
